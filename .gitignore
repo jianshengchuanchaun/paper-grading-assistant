@@ -1,0 +1,14 @@
+node_modules/
+dist/
+vendor/
+.env
+.env.*
+!.env.example
+playwright-report/
+test-results/
+.local/
+*.log
+*.zip
+docs/original-v1.html
+README.txt
+sample-exam.jpg

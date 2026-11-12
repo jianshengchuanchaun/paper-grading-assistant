@@ -1,0 +1,1706 @@
+(async function () {
+  "use strict";
+  const C = window.GradeCore;
+  const $ = (s) => document.querySelector(s);
+  const esc = (v) =>
+    String(v ?? "").replace(
+      /[&<>"']/g,
+      (c) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[c],
+    );
+  const uid = () =>
+    crypto.randomUUID?.() ||
+    `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  let lang =
+    new URLSearchParams(location.search).get("lang") === "en"
+      ? "en"
+      : new URLSearchParams(location.search).get("lang") === "zh"
+        ? "zh"
+        : document.documentElement.lang.startsWith("en")
+          ? "en"
+          : "zh";
+  const t = (k) => window.GradeI18n.t(k, lang);
+  const icons = {
+    grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+    book: '<path d="M12 5c-3-2-6-2-9-1v15c3-1 6-1 9 1 3-2 6-2 9-1V4c-3-1-6-1-9 1v15"/>',
+    chart: '<path d="M4 3v17h17M8 16v-5m5 5V7m5 9V4"/>',
+    settings:
+      '<path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="currentColor" stroke="none"/><circle cx="16" cy="17" r="3" fill="currentColor" stroke="none"/>',
+    help: '<circle cx="12" cy="12" r="9"/><path d="M9 9a3 3 0 0 1 6 0c0 2-3 2-3 5m0 3h.01"/>',
+    file: '<path d="M14 3H5v18h14V8zM14 3v6h5M8 13h8m-8 4h6"/>',
+    check: '<path d="m5 12 4 4L19 6"/>',
+    circleCheck: '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    upload: '<path d="M12 15V3m-5 5 5-5 5 5M4 15v5h16v-5"/>',
+    download: '<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>',
+    arrow: '<path d="M5 12h14m-5-5 5 5-5 5"/>',
+    spark:
+      '<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/>',
+    search: '<circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/>',
+    shield:
+      '<path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/>',
+    close: '<path d="m6 6 12 12M6 18 18 6"/>',
+    trash: '<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/>',
+    left: '<path d="m15 5-7 7 7 7"/>',
+    right: '<path d="m9 5 7 7-7 7"/>',
+    minus: '<path d="M5 12h14"/>',
+    rotate: '<path d="M3 10a9 9 0 1 1 1 8M3 4v6h6"/>',
+    print: '<path d="M7 8V3h10v5M7 17H3V8h18v9h-4M7 14h10v7H7z"/>',
+    play: '<path d="m8 4 12 8-12 8z"/>',
+    stop: '<rect x="5" y="5" width="14" height="14" rx="2"/>',
+    edit: '<path d="m15 4 5 5M4 20l5-1L21 7l-5-5L4 14z"/>',
+    globe:
+      '<circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/>',
+  };
+  const icon = (n) =>
+    `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${icons[n] || icons.file}</svg>`;
+  const button = (action, label, name, cls = "", attrs = "") =>
+    `<button class="btn ${cls}" data-action="${action}" ${attrs}>${name ? icon(name) : ""}${esc(label)}</button>`;
+  const defaultRubric = () => ({ title: "", instructions: "", questions: [] });
+  const emptyWorkspace = () => ({
+    title: "",
+    className: "",
+    rubric: defaultRubric(),
+    strictness: "standard",
+    students: [],
+    demo: false,
+  });
+  const providers = {
+    zhipu: "https://open.bigmodel.cn/api/paas/v4",
+    qwen: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    moonshot: "https://api.moonshot.cn/v1",
+    openai: "https://api.openai.com/v1",
+    custom: "",
+  };
+  let w = emptyWorkspace();
+  let settings = {
+    mode: "direct",
+    provider: "zhipu",
+    baseUrl: providers.zhipu,
+    model: "",
+  };
+  let apiKey = "",
+    templates = [],
+    view = "workspace",
+    filter = "all",
+    search = "";
+  let selected = null,
+    pageIndex = 0,
+    zoom = 1,
+    uploadTarget = null;
+  let busy = false,
+    batch = null,
+    activeController = null,
+    saveState = "localSaved",
+    saveChain = Promise.resolve(),
+    db;
+  let draftSaveTimer;
+  const rootPath = new URL(
+    "../",
+    document.currentScript?.src || new URL("assets/app.js", location.href),
+  );
+  const assetURL = (p) => new URL(p, rootPath).href;
+  let toastTimer;
+  function toast(message) {
+    $("#toast").textContent = message;
+    $("#toast").classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => $("#toast").classList.remove("show"), 4200);
+  }
+  function errText(e) {
+    return window.GradeI18n.pairs[e.message]
+      ? t(e.message)
+      : String(e.message || e);
+  }
+  function audit(s, action, data = {}) {
+    s.audit ||= [];
+    s.audit.push({ at: new Date().toISOString(), action, ...data });
+    s.audit = s.audit.slice(-200);
+  }
+  function localSnapshot() {
+    return { workspace: w, templates, settings };
+  }
+  async function openDB() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open("gradeflow-v2", 1);
+      req.onupgradeneeded = () => req.result.createObjectStore("workspace");
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+  function dbRead() {
+    return new Promise((resolve, reject) => {
+      const r = db
+        .transaction("workspace")
+        .objectStore("workspace")
+        .get("current");
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    });
+  }
+  function save() {
+    clearTimeout(draftSaveTimer);
+    saveState = "saving";
+    updateSave();
+    const snapshot = structuredClone(localSnapshot());
+    saveChain = saveChain
+      .catch(() => {})
+      .then(
+        () =>
+          new Promise((resolve, reject) => {
+            if (!db) return reject(new Error("saveFailed"));
+            const tx = db.transaction("workspace", "readwrite");
+            tx.objectStore("workspace").put(snapshot, "current");
+            tx.oncomplete = resolve;
+            tx.onerror = () => reject(tx.error);
+            tx.onabort = () => reject(tx.error);
+          }),
+      )
+      .then(() => {
+        saveState = "localSaved";
+        updateSave();
+      })
+      .catch(() => {
+        saveState = "saveFailed";
+        updateSave();
+        toast(t("saveFailed"));
+      });
+    return saveChain;
+  }
+  function updateSave() {
+    const el = $("#save-state");
+    if (el) {
+      el.innerHTML = `<i class="dot"></i>${esc(t(saveState))}`;
+      el.title = t(saveState);
+    }
+  }
+  try {
+    db = await openDB();
+    const saved = await dbRead();
+    if (saved?.workspace) {
+      w = C.validateBackup({
+        format: "gradeflow",
+        version: 2,
+        workspace: saved.workspace,
+      });
+      templates = Array.isArray(saved.templates)
+        ? saved.templates
+            .filter((r) => {
+              try {
+                C.validateRubric(r.rubric);
+                return true;
+              } catch {
+                return false;
+              }
+            })
+            .slice(0, 100)
+        : [];
+      const cfg = saved.settings || {};
+      settings = {
+        mode: cfg.mode === "relay" ? "relay" : "direct",
+        provider: Object.hasOwn(providers, cfg.provider)
+          ? cfg.provider
+          : "custom",
+        baseUrl:
+          typeof cfg.baseUrl === "string" ? cfg.baseUrl : providers.zhipu,
+        model: typeof cfg.model === "string" ? cfg.model : "",
+      };
+    }
+  } catch {
+    saveState = "saveFailed";
+  }
+  function rubricValid() {
+    try {
+      C.validateRubric(w.rubric);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  const isStale = (s) => C.stale(s, w.rubric, w.strictness);
+  const eligible = (s) =>
+    !!s.result &&
+    s.status === "done" &&
+    s.approved &&
+    !isStale(s) &&
+    C.totals(s).complete;
+  function studentStatus(s) {
+    if (s.status === "grading") return "grading";
+    if (s.status === "error") return "failed";
+    if (isStale(s)) return "stale";
+    if (s.result) return eligible(s) ? "approved" : "review";
+    return "pending";
+  }
+  function counts() {
+    return {
+      total: w.students.length,
+      graded: w.students.filter((s) => s.result && !isStale(s)).length,
+      review: w.students.filter((s) => studentStatus(s) === "review").length,
+      approved: w.students.filter(eligible).length,
+    };
+  }
+  function badge(s) {
+    const status = studentStatus(s);
+    return `<span class="badge ${status}">${status === "approved" ? icon("check") : "<span>•</span>"}${esc(t(status === "approved" ? "confirmed" : status))}</span>`;
+  }
+  function getStudent(id = selected) {
+    return w.students.find((s) => s.id === id);
+  }
+  function newStudent(name) {
+    return {
+      id: uid(),
+      name:
+        name ||
+        `${t("student")} ${String(w.students.length + 1).padStart(2, "0")}`,
+      pages: [],
+      status: "idle",
+      result: null,
+      approved: false,
+      error: "",
+      audit: [],
+    };
+  }
+  function render() {
+    document.documentElement.lang = lang === "en" ? "en" : "zh-CN";
+    document.title = `${t("brand")} · ${t(view)}`;
+    const n = counts();
+    $("#app").innerHTML = `<aside class="sidebar">
+      <a class="brand" href="#" data-action="view" data-view="workspace"><img src="${assetURL("assets/favicon.svg")}" alt=""><div><strong>${esc(t("brand"))}</strong><small>${lang === "en" ? "TEACHER WORKSPACE" : "GRADEFLOW"}</small></div></a>
+      <div class="workspace-select"><span class="avatar">${icon("book")}</span><div><div class="small">${esc(w.className || t("defaultClass"))}</div><small class="muted">${esc(t("localOnly"))}</small></div></div>
+      <div class="nav-caption">${t("tools")}</div>
+      <nav aria-label="${esc(t("tools"))}">${[
+        ["workspace", "grid"],
+        ["rubrics", "book"],
+        ["insights", "chart"],
+        ["settings", "settings"],
+      ]
+        .map(
+          ([key, ico]) =>
+            `<button class="nav-item ${view === key ? "active" : ""}" data-action="view" data-view="${key}" ${view === key ? 'aria-current="page"' : ""}>${icon(ico)}${t(key)}${key === "workspace" && n.total ? `<span class="nav-count">${n.total}</span>` : ""}</button>`,
+        )
+        .join("")}</nav>
+      <div class="sidebar-bottom"><button class="nav-item" data-action="view" data-view="help">${icon("help")}${t("help")}</button><button class="nav-item" data-action="backup">${icon("download")}${t("backup")}</button><button class="nav-item" data-action="restore">${icon("upload")}${t("restore")}</button><div class="local-card"><div class="row">${icon("shield")}<strong>${t("localFirst")}</strong></div><p>${t("localNote")}</p></div><div class="side-footer">GRADEFLOW · v2.0</div></div>
+    </aside><div class="shell"><header class="topbar"><div class="breadcrumb">${icon("book")}<span>${t("myWorkspace")}</span><span>/</span><b>${t(view)}</b></div><div class="top-actions"><span class="save-state" id="save-state"></span><button class="language" data-action="language">${t("language")}</button><span class="avatar">${lang === "en" ? "T" : "师"}</span></div></header><main id="main" class="main" tabindex="-1">${view === "workspace" ? workspaceHTML() : view === "rubrics" ? rubricsHTML() : view === "insights" ? insightsHTML() : view === "settings" ? settingsHTML() : helpHTML()}<footer class="page-footer">${t("tagline")} &nbsp;·&nbsp; GradeFlow</footer></main></div>`;
+    updateSave();
+    if (view === "settings") {
+      $("#api-key").value = apiKey;
+      $("#main .settings-layout").insertAdjacentHTML(
+        "beforeend",
+        `<section class="panel"><div class="row wrap">${button("backup", t("backup"), "download")}${button("restore", t("restore"), "upload")}${button("view", t("help"), "help", "", 'data-view="help"')}</div></section>`,
+      );
+    }
+  }
+  function heading(title, subtitle, actions = "") {
+    return `<div class="page-heading"><div><div class="eyebrow">${view === "workspace" ? "A LITTLE LESS MARKING, A LOT MORE TEACHING" : "GRADEFLOW / " + view.toUpperCase()}</div><h1>${esc(title)}</h1><p>${esc(subtitle)}</p></div>${actions ? `<div class="row wrap">${actions}</div>` : ""}</div>`;
+  }
+  function metric(label, value, foot, ico, cls = "") {
+    return `<div class="metric ${cls}"><div class="label">${t(label)}</div><div class="metric-icon">${icon(ico)}</div><div class="value">${value}</div><div class="foot">${esc(foot)}</div></div>`;
+  }
+  function workspaceHTML() {
+    const n = counts();
+    const totalMax = C.round(
+      w.rubric.questions.reduce((a, q) => a + (Number(q.max) || 0), 0),
+    );
+    const progress = n.total ? Math.round((n.approved / n.total) * 100) : 0;
+    return (
+      heading(
+        t("welcome"),
+        t("intro"),
+        button("demo", t("demo"), "play", "ghost", busy ? "disabled" : "") +
+          button(
+            "new-batch",
+            t("newBatch"),
+            "plus",
+            "primary",
+            busy ? "disabled" : "",
+          ),
+      ) +
+      `${w.demo ? `<div class="notice">${icon("spark")}${t("demoBanner")}</div>` : ""}
+      <div class="workflow">${["step1", "step2", "step3", "step4"].map((key, i) => `${i ? '<span class="workflow-line"></span>' : ""}<div class="workflow-step ${(i === 0 && rubricValid()) || (i === 1 && n.total) ? "complete" : ""} ${i === (n.approved ? 3 : n.total ? 2 : rubricValid() ? 1 : 0) ? "current" : ""}"><span>${(i === 0 && rubricValid()) || (i === 1 && n.total) ? "✓" : i + 1}</span>${t(key)}</div>`).join("")}</div>
+      <div class="metrics">${metric("totalPapers", n.total, w.className || t("defaultClass"), "file")}${metric("graded", n.graded, t("draftLabel"), "spark")}${metric("reviewQueue", n.review, t("resultIntro"), "clock", "amber")}${metric("approved", n.approved, t("localNote"), "circleCheck", "green")}</div>
+      <div class="overview-row"><section class="rubric-callout"><div><h2>${t("rubricCard")}</h2><p>${t("rubricCardText")}</p><button class="text-button" data-action="view" data-view="rubrics">${t("editRubric")}${icon("arrow")}</button></div><div class="illustration" aria-hidden="true"><div class="mini-paper back"></div><div class="mini-paper"><i></i><i></i><i></i><i></i><span class="check">✓</span></div></div></section><section class="progress-card"><div class="progress-ring" style="--progress:${progress}%"><strong>${progress}<small>%</small></strong></div><div><h3>${t("batchProgress")}</h3><p>${n.approved} / ${n.total} &nbsp;${t("confirmed")}</p><button class="text-button" data-action="filter" data-filter="review">${t("reviewQueue")}${icon("arrow")}</button></div></section></div>
+      <section aria-labelledby="submissions-heading"><div class="section-header"><div><h2 id="submissions-heading">${esc(w.title || t("batchTitle"))}<span class="count">${n.total}</span></h2><p>${rubricValid() ? `${esc(w.rubric.title || t("rubricReady"))} · ${w.rubric.questions.length} ${t("questions")} · ${totalMax} ${t("points")}` : t("batchSubtitle")}</p></div><div class="row wrap">${button("export", t("export"), "download", "", n.graded ? "" : "disabled")}${button("add-student", t("newStudent"), "plus", "", busy ? "disabled" : "")}${button(batch ? "stop" : "grade-pending", t(batch ? "stop" : "gradePending"), batch ? "stop" : "spark", "primary", !batch && busy ? "disabled" : "")}</div></div>
+      ${batch ? `<div class="batch-banner"><span>${t("grading")} ${batch.done} / ${batch.total}</span><progress value="${batch.done}" max="${batch.total}"></progress><span>${esc(batch.current || "")}</span></div>` : ""}
+      <div class="table-card"><div class="table-toolbar"><div class="tabs" role="group" aria-label="${t("status")}">${["all", "pending", "review", "confirmed", "failed"].map((k) => `<button class="tab ${filter === k ? "active" : ""}" data-action="filter" data-filter="${k}" aria-pressed="${filter === k}">${t(k)}</button>`).join("")}</div><label class="search">${icon("search")}<input type="search" id="search" aria-label="${t("search")}" placeholder="${t("search")}" value="${esc(search)}"></label></div><div id="student-table">${tableHTML()}</div><div class="table-footer"><span>${n.total} ${t("totalPapers")} &nbsp;·&nbsp; ${t("localFirst")}</span><span>${t("resultIntro")}</span></div></div>
+      <div class="dropzone" role="button" tabindex="0" data-action="upload" aria-label="${t("upload")}"><span class="upload-icon">${icon("upload")}</span><div><h3>${t("dropTitle")}</h3><p>${t("uploadHint")}</p></div><span class="btn">${t("upload")}</span></div></section>`
+    );
+  }
+  function tableHTML() {
+    const list = w.students.filter(
+      (s) =>
+        s.name.toLocaleLowerCase().includes(search.toLocaleLowerCase()) &&
+        (filter === "all" ||
+          (filter === "confirmed"
+            ? eligible(s)
+            : filter === "pending"
+              ? ["pending", "stale"].includes(studentStatus(s))
+              : studentStatus(s) === filter)),
+    );
+    if (!list.length)
+      return `<div class="empty"><div class="empty-icon">${icon("file")}</div><h3>${t(w.students.length ? "noMatches" : "emptyTitle")}</h3><p>${t(w.students.length ? "search" : "emptyText")}</p>${!w.students.length ? button("upload", t("upload"), "upload", "primary") + button("demo", t("demo"), "play", "ghost") : ""}</div>`;
+    return `<div class="table-scroll"><table><thead><tr><th>${t("student")}</th><th class="paper-col">${t("paper")}</th><th>${t("status")}</th><th>${t("score")}</th><th>${t("action")}</th></tr></thead><tbody>${list
+      .map((s, i) => {
+        const sum = C.totals(s);
+        return `<tr><td><div class="student-cell"><span class="avatar">${esc(s.name.slice(0, 1))}</span><div><strong>${esc(s.name)}</strong><small>${w.demo ? "DEMO" : "STUDENT"} · ${String(w.students.indexOf(s) + 1).padStart(3, "0")}</small></div></div></td><td class="paper-col"><span class="paper-cell">${icon("file")}${s.pages.length ? `${s.pages.length} ${t("pages")}` : t("noPaper")}</span></td><td>${badge(s)}</td><td class="score">${s.result ? `${sum.complete ? sum.score : "—"}<small>/ ${sum.max}</small>` : '<span class="muted">—</span>'}</td><td><button class="text-button" data-action="review" data-id="${esc(s.id)}">${t("open")}${icon("right")}</button></td></tr>`;
+      })
+      .join("")}</tbody></table></div>`;
+  }
+  function rubricsHTML() {
+    return (
+      heading(
+        t("rubricTitle"),
+        t("rubricIntro"),
+        button(
+          "load-rubric",
+          t("loadExample"),
+          "book",
+          "",
+          busy ? "disabled" : "",
+        ),
+      ) +
+      `<div class="rubric-layout"><div class="panel"><div class="form-grid"><div class="field"><label for="rubric-title">${t("rubricName")}</label><input id="rubric-title" type="text" data-rubric-field="title" maxlength="150" value="${esc(w.rubric.title)}" ${busy ? "disabled" : ""}></div><div class="field"><label for="strictness">${t("strictness")}</label><select id="strictness" ${busy ? "disabled" : ""}>${["lenient", "standard", "strict"].map((s) => `<option value="${s}" ${s === w.strictness ? "selected" : ""}>${t(s)}</option>`).join("")}</select></div></div><p class="small muted" style="margin:16px 0">${t("strictHelp")}</p>
+      <div id="question-editors">${w.rubric.questions.map((q, i) => `<div class="question-editor"><div><label for="qno-${i}">${t("questionNo")}</label><input id="qno-${i}" data-qindex="${i}" data-qfield="no" type="text" maxlength="30" value="${esc(q.no)}" ${busy ? "disabled" : ""}></div><div><label for="qmax-${i}">${t("maxPoints")}</label><input id="qmax-${i}" data-qindex="${i}" data-qfield="max" type="number" min="0.01" max="1000" step="0.01" value="${esc(q.max)}" ${busy ? "disabled" : ""}></div><div class="criterion-field"><label for="qcriteria-${i}">${t("criterion")}</label><textarea id="qcriteria-${i}" data-qindex="${i}" data-qfield="criteria" maxlength="12000" placeholder="${t("rubricPlaceholder")}" ${busy ? "disabled" : ""}>${esc(q.criteria)}</textarea></div><button class="btn icon-only danger" aria-label="${t("delete")} ${esc(q.no)}" data-action="remove-question" data-index="${i}" ${busy ? "disabled" : ""}>${icon("trash")}</button></div>`).join("")}</div>
+      <div class="row between" style="margin:16px 0">${button("add-question", t("addQuestion"), "plus", "", busy ? "disabled" : "")}<span class="rubric-total">${t("scoreOf")} <span id="rubric-total">${C.round(w.rubric.questions.reduce((a, q) => a + (Number(q.max) || 0), 0))}</span> ${t("points")}</span></div>
+      <div class="field"><label for="rubric-notes">${t("extraInstructions")}</label><textarea id="rubric-notes" data-rubric-field="instructions" maxlength="20000" ${busy ? "disabled" : ""}>${esc(w.rubric.instructions)}</textarea></div><div class="row wrap" style="margin-top:18px">${button("save-template", t("saveTemplate"), "check", "primary", busy ? "disabled" : "")}${button("import-rubric", t("importText"), "upload", "", busy ? "disabled" : "")}</div></div>
+      <aside class="stack template-panel"><section class="panel"><h3>${t("templates")}</h3>${templates.length ? templates.map((r) => `<div class="template-item"><p>${esc(r.name)}</p><div class="row between"><small class="muted">${r.rubric.questions.length} ${t("questions")}</small><div>${button("use-template", t("useTemplate"), "", "sm", `data-id="${esc(r.id)}" ${busy ? "disabled" : ""}`)}<button class="btn icon-only ghost danger" data-action="delete-template" data-id="${esc(r.id)}" aria-label="${t("delete")} ${esc(r.name)}" ${busy ? "disabled" : ""}>${icon("trash")}</button></div></div></div>`).join("") : `<p class="small muted" style="margin-top:15px">${t("noTemplates")}</p>`}</section><div class="callout">${icon("shield")}<h3>${t("rubricReady")}</h3><p style="margin-top:8px">${t("rubricIntro")}</p></div></aside></div>`
+    );
+  }
+  function insightsHTML() {
+    const list = w.students.filter(eligible);
+    const percentages = list.map((s) => {
+      const a = C.totals(s);
+      return (a.score / a.max) * 100;
+    });
+    const avg = percentages.length
+      ? C.round(percentages.reduce((a, b) => a + b, 0) / list.length)
+      : 0;
+    const pass = list.length
+      ? Math.round(
+          (percentages.filter((p) => p >= 60).length / list.length) * 100,
+        )
+      : 0;
+    const distribution = [0, 0, 0, 0, 0];
+    percentages.forEach(
+      (v) =>
+        distribution[v < 60 ? 0 : v < 70 ? 1 : v < 80 ? 2 : v < 90 ? 3 : 4]++,
+    );
+    const questionRates = w.rubric.questions.map((q) => ({
+      no: q.no,
+      rate: list.length
+        ? C.round(
+            (list.reduce(
+              (sum, s) =>
+                sum + (s.result.items.find((it) => it.no === q.no)?.score || 0),
+              0,
+            ) /
+              (list.length * q.max)) *
+              100,
+          )
+        : 0,
+    }));
+    return (
+      heading(
+        t("insightsTitle"),
+        t("insightsIntro"),
+        button(
+          "export",
+          t("export"),
+          "download",
+          "",
+          list.length ? "" : "disabled",
+        ),
+      ) +
+      (list.length
+        ? `<div class="metrics">${metric("approved", list.length, t("basedOn"), "circleCheck", "green")}${metric("average", `${avg}<small>%</small>`, w.title || t("defaultTitle"), "chart")}${metric("passRate", `${pass}<small>%</small>`, t("passNote"), "check")}${metric("reviewQueue", counts().review, t("resultIntro"), "clock", "amber")}</div><div class="chart-grid"><div class="panel"><h2>${t("distribution")}</h2><div class="histogram" role="img" aria-label="${esc(distribution.map((n, i) => `${["0–59", "60–69", "70–79", "80–89", "90–100"][i]}%: ${n}`).join(", "))}">${distribution.map((n, i) => `<div class="col"><strong>${n}</strong><div class="bar" style="height:${(n / Math.max(...distribution, 1)) * 145}px"></div><small>${["0–59", "60–69", "70–79", "80–89", "90–100"][i]}%</small></div>`).join("")}</div></div><div class="panel"><h2>${t("questionAnalysis")}</h2>${questionRates.map((q) => `<div class="question-bar"><span>Q${esc(q.no)}</span><div class="bar-track"><i class="${q.rate < 60 ? "low" : ""}" style="width:${q.rate}%"></i></div><span>${q.rate}%</span></div>`).join("")}</div></div><section class="panel" style="margin-top:20px"><h2>${t("teachingFocus")}</h2><div class="focus-list">${
+            questionRates
+              .filter((q) => q.rate < 80)
+              .sort((a, b) => a.rate - b.rate)
+              .slice(0, 3)
+              .map(
+                (q) =>
+                  `<div class="focus-item">Q${esc(q.no)} &nbsp; <strong>${q.rate}%</strong></div>`,
+              )
+              .join("") || '<span class="badge approved">≥ 80%</span>'
+          }</div><p class="small muted">${t("lowest")}</p></section>`
+        : `<div class="panel empty"><div class="empty-icon">${icon("chart")}</div><h3>${t("insightsEmpty")}</h3><p>${t("insightsIntro")}</p>${button("view", t("workspace"), "arrow", "primary", 'data-view="workspace"')}</div>`)
+    );
+  }
+  function settingsHTML() {
+    return (
+      heading(t("settingsTitle"), t("settingsIntro")) +
+      `<div class="settings-layout"><section class="panel"><h2>${t("connectionMode")}</h2><div class="segmented">${["direct", "relay"].map((mode) => `<button data-action="connection-mode" data-mode="${mode}" class="${settings.mode === mode ? "active" : ""}" ${busy ? "disabled" : ""}>${t(mode)}</button>`).join("")}</div>
+      <div ${settings.mode === "relay" ? 'class="hidden"' : ""}><div class="form-grid"><div class="field"><label for="provider">${t("provider")}</label><select id="provider" ${busy ? "disabled" : ""}>${[
+        ["zhipu", "Zhipu / 智谱"],
+        ["qwen", "Qwen / 通义千问"],
+        ["moonshot", "Moonshot / Kimi"],
+        ["openai", "OpenAI"],
+        ["custom", t("custom")],
+      ]
+        .map(
+          ([k, n]) =>
+            `<option value="${k}" ${settings.provider === k ? "selected" : ""}>${esc(n)}</option>`,
+        )
+        .join(
+          "",
+        )}</select></div><div class="field"><label for="model">${t("model")}</label><input id="model" type="text" value="${esc(settings.model)}" placeholder="vision-model-id" ${busy ? "disabled" : ""}></div><div class="field full-width"><label for="base-url">${t("baseUrl")}</label><input id="base-url" type="text" value="${esc(settings.baseUrl)}" placeholder="https://…/v1" ${busy ? "disabled" : ""}><small>${t("modelHelp")}</small></div><div class="field full-width"><label for="api-key">${t("apiKey")}</label><input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="••••••••" ${busy ? "disabled" : ""}><small>${t("keyHelp")}</small></div></div></div>
+      ${settings.mode === "relay" ? `<div class="callout">${t("relayHelp")}</div>` : ""}<div class="row wrap" style="margin-top:22px">${button("save-settings", t("save"), "check", "primary", busy ? "disabled" : "")}${button("test-connection", t("connectTest"), "spark", "", busy ? "disabled" : "")}${button("clear-key", t("clearKey"), "", "ghost", busy ? "disabled" : "")}</div><p id="connection-result" class="small muted" role="status" style="margin-top:15px"></p></section><section class="panel"><div class="row">${icon("shield")}<h2 style="margin-bottom:0">${t("privacyTitle")}</h2></div><p class="small muted" style="margin-top:12px;line-height:2">${t("privacyText")}</p></section></div>`
+    );
+  }
+  function helpHTML() {
+    return (
+      heading(t("guideTitle"), t("tagline")) +
+      `<div style="max-width:900px"><div class="guide-list">${[1, 2, 3, 4, 5].map((i) => `<p>${t("guide" + i)}</p>`).join("")}</div><div class="callout">${t("guideLimits")}</div><div class="row wrap" style="margin-top:20px">${button("demo", t("demo"), "play", "primary")}${button("backup", t("backup"), "download")}${button("restore", t("restore"), "upload")}</div></div>`
+    );
+  }
+  function showDialog(html, cls = "") {
+    const d = $("#dialog");
+    d.className = cls;
+    d.innerHTML = html;
+    const heading = d.querySelector("h2");
+    if (heading) {
+      heading.id = "dialog-title";
+      d.setAttribute("aria-labelledby", "dialog-title");
+    }
+    if (!d.open) d.showModal();
+  }
+  function closeDialog() {
+    $("#dialog").close();
+    selected = null;
+  }
+  function dialogHeading(title) {
+    return `<header class="dialog-header"><h2>${esc(title)}</h2><button class="btn icon-only ghost" data-action="close" aria-label="${t("close")}">${icon("close")}</button></header>`;
+  }
+  function showNewBatch() {
+    showDialog(
+      dialogHeading(t("newBatch")) +
+        `<form id="new-batch-form"><div class="dialog-body stack"><div class="field"><label for="batch-title">${t("examTitle")}</label><input id="batch-title" type="text" maxlength="150" required placeholder="${t("defaultTitle")}"></div><div class="field"><label for="batch-class">${t("className")}</label><input id="batch-class" type="text" maxlength="100" placeholder="${t("defaultClass")}"></div>${w.students.length ? `<p>${t("newConfirm")}</p>` : ""}</div><footer class="dialog-footer">${button("close", t("cancel"), "", "", 'type="button"')}<button class="btn primary" type="submit">${t("confirm")}</button></footer></form>`,
+    );
+  }
+  function addStudentDialog() {
+    showDialog(
+      dialogHeading(t("newStudent")) +
+        `<form id="add-student-form"><div class="dialog-body field"><label for="new-student-name">${t("student")}</label><input id="new-student-name" type="text" maxlength="100" required placeholder="${t("namePlaceholder")}"></div><div class="dialog-footer">${button("close", t("cancel"), "", "", 'type="button"')}<button class="btn primary" type="submit">${t("confirm")}</button></div></form>`,
+    );
+  }
+  function openReview(id, keepPage = false) {
+    const s = getStudent(id);
+    if (!s) return;
+    const scrollTop =
+      keepPage && selected === id
+        ? $("#dialog .review-scroll")?.scrollTop || 0
+        : 0;
+    const paperTop =
+      keepPage && selected === id
+        ? $("#dialog .paper-scroll")?.scrollTop || 0
+        : 0;
+    if (!keepPage || selected !== id) {
+      pageIndex = 0;
+      zoom = 1;
+    }
+    selected = id;
+    pageIndex = Math.min(pageIndex, Math.max(0, s.pages.length - 1));
+    const sum = C.totals(s);
+    const stale = isStale(s);
+    const idx = w.students.indexOf(s);
+    showDialog(
+      `<header class="dialog-header"><div><div class="row"><h2>${esc(s.name)}</h2>${badge(s)}</div><small>${t("shortcutHint")}</small></div><div class="row">${button("prev-student", "", "left", "icon-only", `aria-label="${t("previousStudent")}" ${idx === 0 ? "disabled" : ""}`)}<span class="small muted mono">${idx + 1} / ${w.students.length}</span>${button("next-student", "", "right", "icon-only", `aria-label="${t("nextStudent")}" ${idx === w.students.length - 1 ? "disabled" : ""}`)}${button("close", "", "close", "icon-only ghost", `aria-label="${t("close")}"`)}</div></header><div class="review-body"><section class="paper-view" aria-label="${t("paperPreview")}"><div class="paper-toolbar"><div class="row"><span class="small muted">${t("paperPreview")}</span>${button("add-pages", t("addPages"), "plus", "sm", busy ? "disabled" : "")}</div><div class="row">${button("zoom-out", "", "minus", "icon-only", `aria-label="${t("zoomOut")}"`)}<small>${Math.round(zoom * 100)}%</small>${button("zoom-in", "", "plus", "icon-only", `aria-label="${t("zoomIn")}"`)}${button("rotate", "", "rotate", "icon-only", `aria-label="${t("rotate")}" ${busy || !s.pages.length ? "disabled" : ""}`)}${button("remove-page", "", "trash", "icon-only danger", `aria-label="${t("removePage")}" ${busy || !s.pages.length ? "disabled" : ""}`)}</div></div><div class="paper-scroll">${s.pages.length ? `<img src="${s.pages[pageIndex].dataUrl}" style="width:${zoom * 100}%" alt="${esc(s.name)} · ${t("page")} ${pageIndex + 1}">` : `<div class="empty"><div class="empty-icon">${icon("upload")}</div><h3>${t("noPages")}</h3><p>${t("uploadHint")}</p>${button("add-pages", t("addPages"), "plus", "primary", busy ? "disabled" : "")}</div>`}</div><div class="page-strip">${s.pages.map((p, i) => `<button class="page-thumb ${i === pageIndex ? "active" : ""}" data-action="page" data-index="${i}" aria-label="${t("page")} ${i + 1}" aria-pressed="${i === pageIndex}"><img src="${p.dataUrl}" alt=""><span>${i + 1}</span></button>`).join("")}</div></section><section class="review-content"><div class="review-scroll"><div class="review-summary"><div><h3>${t("resultTitle")}</h3><p>${t("resultIntro")}</p></div><div class="big-score">${s.result ? (sum.complete ? sum.score : "—") : "—"}<small>${s.result ? " / " + sum.max : ""}</small></div></div><div class="field" style="margin-bottom:18px"><label for="student-name">${t("student")}</label><input id="student-name" type="text" maxlength="100" value="${esc(s.name)}" ${busy ? "disabled" : ""}></div>
+      ${s.result?.demo ? `<div class="notice">${t("noRealAI")}</div>` : ""}${stale ? `<div class="notice error">${t("rubricChanged")}</div>` : ""}${s.error ? `<div class="notice error">${esc(s.error)}</div>` : ""}
+      ${
+        s.result
+          ? `${s.result.warnings.map((m) => `<div class="notice">${esc(m)}</div>`).join("")}${s.result.items.map((q, i) => `<article class="question-result ${q.needsReview ? "flagged" : ""}"><div class="question-title"><div><strong>${t("questionNo")} ${esc(q.no)}</strong>${q.needsReview ? ` <span class="badge review">${t("needsAttention")}</span>` : ""}${q.adjusted ? ` <span class="badge approved">${t("adjusted")}</span>` : ""}</div><label class="row score-label"><span>${t("teacherScore")}</span><input class="score-input" type="number" min="0" max="${q.max}" step="0.01" data-score="${i}" aria-label="${t("teacherScore")} ${esc(q.no)}" value="${q.score === null ? "" : q.score}" ${busy || stale ? "disabled" : ""}> / ${q.max}</label></div><div class="small muted">${t("aiScore")}: ${q.aiScore === null ? "—" : q.aiScore}</div>${q.reviewReason ? `<p class="status-error">${t(q.reviewReason)}</p>` : ""}${q.answer ? `<div class="evidence"><b>${t("answer")}</b> · ${esc(q.answer)}</div>` : ""}<p class="reason">${esc(q.comment)}</p><details><summary>${t("criteriaLabel")}</summary><p>${esc(s.result.rubric.questions.find((r) => r.no === q.no)?.criteria || "")}</p></details><label class="field"><span class="score-label">${t("teacherNote")}</span><textarea data-note="${i}" maxlength="3000" placeholder="${t("notePlaceholder")}" ${busy || stale ? "disabled" : ""}>${esc(q.note)}</textarea></label></article>`).join("")}<div class="feedback-box"><h3>${t("feedback")}</h3><p>${esc(s.result.overall)}</p></div><details class="audit"><summary>${t("audit")} (${s.audit.length})</summary>${s.audit
+              .slice()
+              .reverse()
+              .map(
+                (a) =>
+                  `<p>${esc(new Date(a.at).toLocaleString(lang === "en" ? "en-US" : "zh-CN"))} · ${esc(t(a.action))}${a.no ? " · Q" + esc(a.no) : ""}${a.action === "adjusted" ? ` · ${a.from ?? "—"} → ${a.to ?? "—"}` : ""}</p>`,
+              )
+              .join("")}</details>`
+          : `<div class="empty"><div class="empty-icon">${icon("spark")}</div><p>${t("noResult")}</p>${button("grade-one", t("grade"), "spark", "primary", busy || !s.pages.length ? "disabled" : "")}</div>`
+      }
+      <p class="review-footer-note">${t("uploadPrivacy")}</p></div><footer class="review-actions"><div class="row">${s.result ? button("grade-one", t("regrade"), "spark", "sm", busy ? "disabled" : "") : ""}${button("delete-student", "", "trash", "icon-only danger", `aria-label="${t("delete")}" ${busy ? "disabled" : ""}`)}${s.result ? button("print", t("printReport"), "print", "sm") : ""}</div>${s.result ? button(s.approved ? "unapprove" : "approve", t(s.approved ? "unapprove" : "approvedAction"), s.approved ? "minus" : "check", "primary", busy || stale || s.status !== "done" || !sum.complete ? "disabled" : "") : ""}</footer></section></div>`,
+      "review-dialog",
+    );
+    $("#dialog .review-scroll").scrollTop = scrollTop;
+    $("#dialog .paper-scroll").scrollTop = paperTop;
+  }
+  function updateReviewAfterEdit(s) {
+    const sum = C.totals(s);
+    $("#dialog .big-score").innerHTML =
+      `${sum.complete ? sum.score : "—"}<small> / ${sum.max}</small>`;
+    const statusBadge = $("#dialog .dialog-header .badge");
+    if (statusBadge) statusBadge.outerHTML = badge(s);
+    const approval = $(
+      '#dialog [data-action="approve"], #dialog [data-action="unapprove"]',
+    );
+    if (approval) {
+      approval.dataset.action = "approve";
+      approval.innerHTML = icon("check") + esc(t("approvedAction"));
+      approval.disabled =
+        busy || isStale(s) || s.status !== "done" || !sum.complete;
+    }
+  }
+  function sampleRubric() {
+    const en = lang === "en";
+    return {
+      title: en
+        ? "Everyday mathematics · Grade 3"
+        : "三年级数学 · 生活中的数学",
+      instructions: en
+        ? "Award partial credit only according to the criteria. Flag unreadable handwriting for teacher review."
+        : "按得分点给予过程分，字迹无法辨认时交由教师复核。",
+      questions: [
+        {
+          no: "1",
+          max: 10,
+          criteria: en
+            ? "23 + 58 = 81. Correct working and answer: 10; correct answer only: 8."
+            : "23 + 58 = 81。过程与结果均正确 10 分；仅答案正确 8 分。",
+        },
+        {
+          no: "2",
+          max: 10,
+          criteria: en
+            ? "100 − 37 = 63. Correct working and answer: 10; correct answer only: 8."
+            : "100 − 37 = 63。过程与结果均正确 10 分；仅答案正确 8 分。",
+        },
+        {
+          no: "3",
+          max: 10,
+          criteria: en
+            ? "12 × 8 = 96. Correct working and answer: 10; correct answer only: 8; wrong answer: 0."
+            : "12 × 8 = 96。过程与结果均正确 10 分；仅答案正确 8 分；错误 0 分。",
+        },
+        {
+          no: "4",
+          max: 10,
+          criteria: en
+            ? "Perimeter of an 8 cm × 5 cm rectangle: 26 cm. Correct answer: 10; missing unit: deduct 2."
+            : "长方形长 8 厘米、宽 5 厘米，周长 26 厘米。答案正确 10 分；缺单位扣 2 分。",
+        },
+        {
+          no: "5",
+          max: 10,
+          criteria: en
+            ? "3/4 + 1/4 = 1. Correct answer: 10; incorrect: 0."
+            : "3/4 + 1/4 = 1。正确 10 分，错误 0 分。",
+        },
+        {
+          no: "6",
+          max: 20,
+          criteria: en
+            ? "24 apples shared among 6 students: 24 ÷ 6 = 4. Correct setup: 10; correct result: 10."
+            : "24 个苹果平均分给 6 人，每人 4 个。列式 24 ÷ 6 正确 10 分，计算结果正确 10 分。",
+        },
+        {
+          no: "7",
+          max: 30,
+          criteria: en
+            ? "120-page book, read 1/4 then 30 pages. 120 − 120 × 1/4 − 30 = 60 pages left. Setup: 15; result: 10; full answer with units: 5."
+            : "120 页书，先看 1/4，再看 30 页，还剩 60 页。列式正确 15 分，计算正确 10 分，答句与单位完整 5 分。",
+        },
+      ],
+    };
+  }
+  const demoScores = [
+    [10, 10, 8, 10, 10, 20, 25],
+    [10, 8, 8, 8, 10, 20, 20],
+    [10, 10, 0, 8, 10, 10, null],
+    [10, 8, 8, 10, 10, 20, 30],
+  ];
+  function samplePaper(name, variant) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1100;
+    canvas.height = 1500;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fffefa";
+    ctx.fillRect(0, 0, 1100, 1500);
+    ctx.fillStyle = "#29382d";
+    ctx.textAlign = "center";
+    ctx.font = 'bold 34px "Segoe UI","Microsoft YaHei",sans-serif';
+    ctx.fillText(
+      lang === "en" ? "EVERYDAY MATHEMATICS" : "生活中的数学 · 单元测验",
+      550,
+      90,
+    );
+    ctx.font = '17px "Segoe UI","Microsoft YaHei",sans-serif';
+    ctx.fillText(
+      lang === "en"
+        ? "FICTIONAL SAMPLE · Grade 3 · 100 points"
+        : "虚构示例 · 三年级 · 满分 100 分",
+      550,
+      130,
+    );
+    ctx.textAlign = "left";
+    ctx.fillText(`${t("student")}: ${name}`, 70, 185);
+    ctx.fillText(lang === "en" ? "Class: 3B" : "班级：三年级（2）班", 700, 185);
+    ctx.strokeStyle = "#d5daca";
+    ctx.beginPath();
+    ctx.moveTo(70, 215);
+    ctx.lineTo(1030, 215);
+    ctx.stroke();
+    const qs =
+      lang === "en"
+        ? [
+            "1. Calculate 23 + 58.",
+            "2. Calculate 100 − 37.",
+            "3. Calculate 12 × 8.",
+            "4. Find the perimeter of a rectangle, 8 cm long and 5 cm wide.",
+            "5. Calculate 3/4 + 1/4.",
+            "6. Share 24 apples equally among 6 students. How many each?",
+            "7. A book has 120 pages. Read 1/4, then another 30 pages.",
+            "   How many pages remain?",
+          ]
+        : [
+            "1. 计算 23 + 58。",
+            "2. 计算 100 − 37。",
+            "3. 计算 12 × 8。",
+            "4. 长方形长 8 厘米，宽 5 厘米，周长是多少？",
+            "5. 计算 3/4 + 1/4。",
+            "6. 24 个苹果平均分给 6 个同学，每人分到几个？",
+            "7. 一本书 120 页，第一天看了 1/4，第二天看了 30 页，",
+            "   还剩多少页？",
+          ];
+    const answers = [
+      "23 + 58 = 81",
+      variant === 1 || variant === 3 ? "63" : "100 − 37 = 63",
+      variant === 2 ? "86" : "96",
+      variant === 1 || variant === 2 ? "26" : "(8 + 5) × 2 = 26 cm",
+      "1",
+      variant === 2 ? "4" : "24 ÷ 6 = 4",
+      variant === 2
+        ? "120 − 30 − ... ?"
+        : variant === 1
+          ? "120 − 30 − 30 = 50"
+          : "120 − 120 × 1/4 − 30 = 60",
+      variant === 0
+        ? ""
+        : variant === 1
+          ? "50 pages"
+          : variant === 2
+            ? "…"
+            : "60 pages",
+    ];
+    let y = 275;
+    qs.forEach((q, i) => {
+      ctx.fillStyle = "#3f493d";
+      ctx.font = '21px "Segoe UI","Microsoft YaHei",sans-serif';
+      ctx.fillText(q, 70, y);
+      ctx.fillStyle = "#345e91";
+      ctx.font = 'italic 29px "Segoe UI","KaiTi",sans-serif';
+      ctx.fillText(answers[i], 100, y + 53);
+      ctx.strokeStyle = "#e8ecdf";
+      ctx.beginPath();
+      ctx.moveTo(70, y + 83);
+      ctx.lineTo(1030, y + 83);
+      ctx.stroke();
+      y += 143;
+    });
+    ctx.fillStyle = "#adb59e";
+    ctx.font = "14px sans-serif";
+    ctx.fillText("GradeFlow · Fictional demo / 虚构示例", 70, 1460);
+    return canvas.toDataURL("image/jpeg", 0.9);
+  }
+  function demoResult(s, index = 0) {
+    const scores = demoScores[index % 4];
+    return {
+      items: w.rubric.questions.map((q, i) => ({
+        no: q.no,
+        max: q.max,
+        score: scores[i] === undefined ? null : scores[i],
+        answer:
+          lang === "en"
+            ? "See the fictional paper for this worked answer."
+            : "见示例试卷中的作答。",
+        comment:
+          scores[i] === null
+            ? lang === "en"
+              ? "Handwriting is ambiguous; teacher review is required."
+              : "书写模糊，无法确认计算结果，请教师查看原卷。"
+            : scores[i] === q.max
+              ? lang === "en"
+                ? "Matches the required answer and scoring criteria."
+                : "答案与过程符合评分要求。"
+              : lang === "en"
+                ? "Partial credit. Check the working, calculation and required units against the rubric."
+                : "部分得分，请对照细则核查过程、计算结果及单位。",
+        needs_review: scores[i] === null || index === 2,
+      })),
+      overall:
+        lang === "en"
+          ? "A solid start. Show each calculation step and check units before handing in your work. This is fictional feedback for demonstration."
+          : "基础掌握较好。建议养成写出完整算式、复查计算并补充单位的习惯。（虚构示例反馈）",
+      warnings: [],
+    };
+  }
+  async function loadDemo() {
+    if (w.students.length && !confirm(t("demoConfirm"))) return;
+    w = {
+      title: lang === "en" ? "Mathematics · Unit 3" : "数学 · 第三单元小测",
+      className: lang === "en" ? "Grade 3 · Class B" : "三年级（2）班",
+      rubric: sampleRubric(),
+      strictness: "standard",
+      students: [],
+      demo: true,
+    };
+    const names =
+      lang === "en"
+        ? ["Alex Chen", "Jamie Lee", "Sam Taylor", "Morgan Kim"]
+        : ["陈思远", "林沐晴", "周子墨", "许知夏"];
+    w.students = names.map((name, i) => {
+      const s = newStudent(name);
+      s.pages = [{ name: "demo.jpg", dataUrl: samplePaper(name, i) }];
+      if (i < 3) {
+        s.result = {
+          ...C.parseResult(demoResult(s, i), w.rubric),
+          rubric: structuredClone(w.rubric),
+          signature: C.signature(w.rubric, w.strictness),
+          createdAt: new Date().toISOString(),
+          provider: "demo",
+          demo: true,
+        };
+        s.status = "done";
+        s.approved = i < 2;
+        if (s.approved) audit(s, "approved");
+      }
+      return s;
+    });
+    view = "workspace";
+    filter = "all";
+    search = "";
+    closeDialog();
+    render();
+    await save();
+  }
+  function invalidatePaper(s) {
+    s.result = null;
+    s.approved = false;
+    s.status = "idle";
+    s.error = "";
+    audit(s, "paper");
+  }
+  async function readImage(file) {
+    const url = URL.createObjectURL(file);
+    try {
+      const image = await new Promise((resolve, reject) => {
+        const i = new Image();
+        i.onload = () => resolve(i);
+        i.onerror = () => reject(new Error("importError"));
+        i.src = url;
+      });
+      const scale = Math.min(
+        1,
+        1900 / Math.max(image.naturalWidth, image.naturalHeight),
+      );
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      return [
+        { name: file.name, dataUrl: canvas.toDataURL("image/jpeg", 0.9) },
+      ];
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+  async function readFile(file, remaining = 20) {
+    if (file.size > 25 * 1024 * 1024) throw new Error("fileTooLarge");
+    if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) {
+      if (location.protocol === "file:") throw new Error("pdfNeedsServer");
+      const pdfjs = await import(assetURL("vendor/pdf.mjs"));
+      pdfjs.GlobalWorkerOptions.workerSrc = assetURL("vendor/pdf.worker.mjs");
+      const task = pdfjs.getDocument({
+        data: new Uint8Array(await file.arrayBuffer()),
+        cMapUrl: assetURL("vendor/cmaps/"),
+        cMapPacked: true,
+        standardFontDataUrl: assetURL("vendor/standard_fonts/"),
+        wasmUrl: assetURL("vendor/wasm/"),
+        isEvalSupported: false,
+      });
+      task.onPassword = () => task.destroy();
+      let pdf;
+      try {
+        pdf = await task.promise;
+        if (pdf.numPages > remaining) throw new Error("tooManyPages");
+        const pages = [];
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const p = await pdf.getPage(i);
+          const v = p.getViewport({ scale: 1 });
+          const viewport = p.getViewport({
+            scale: Math.min(2, 1900 / Math.max(v.width, v.height)),
+          });
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.ceil(viewport.width);
+          canvas.height = Math.ceil(viewport.height);
+          await p.render({ canvasContext: canvas.getContext("2d"), viewport })
+            .promise;
+          pages.push({
+            name: `${file.name} · ${i}`,
+            dataUrl: canvas.toDataURL("image/jpeg", 0.9),
+          });
+          p.cleanup();
+        }
+        return pages;
+      } finally {
+        await task.destroy();
+      }
+    }
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type))
+      throw new Error("unsupportedFile");
+    if (remaining < 1) throw new Error("tooManyPages");
+    return readImage(file);
+  }
+  async function importFiles(files, targetId = null) {
+    if (busy || !files.length) return;
+    const target = targetId ? getStudent(targetId) : null;
+    if (target?.result && !confirm(t("changePaper"))) return;
+    if (w.students.length + files.length > 500 && !target)
+      return toast(t("invalidBackup"));
+    busy = true;
+    render();
+    if (selected) openReview(selected, true);
+    toast(t("importing"));
+    let added = 0;
+    const failures = [];
+    try {
+      for (const file of files) {
+        try {
+          const pages = await readFile(
+            file,
+            target ? 20 - target.pages.length : 20,
+          );
+          if (target) {
+            if (target.result) invalidatePaper(target);
+            target.pages.push(...pages);
+          } else {
+            const s = newStudent(
+              file.name.replace(/\.[^.]+$/, "").slice(0, 100),
+            );
+            s.pages = pages;
+            w.students.push(s);
+          }
+          added++;
+        } catch (e) {
+          failures.push(`${file.name}: ${errText(e)}`);
+        }
+      }
+    } finally {
+      busy = false;
+      render();
+      if (selected) openReview(selected, true);
+      await save();
+      toast(
+        failures.length ? failures.join(" · ") : `${t("imported")} · ${added}`,
+      );
+    }
+  }
+  function collectSettings() {
+    if (view !== "settings") return;
+    settings.provider = $("#provider").value;
+    settings.baseUrl = $("#base-url").value.trim().replace(/\/+$/, "");
+    settings.model = $("#model").value.trim();
+    apiKey = $("#api-key").value.trim();
+  }
+  function validateConnection() {
+    if (settings.mode === "relay") {
+      if (location.protocol === "file:") throw new Error("pdfNeedsServer");
+      return;
+    }
+    if (!apiKey || !settings.model || !settings.baseUrl)
+      throw new Error("needSettings");
+    let url;
+    try {
+      url = new URL(settings.baseUrl);
+    } catch {
+      throw new Error("needSettings");
+    }
+    if (
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash ||
+      !(
+        url.protocol === "https:" ||
+        (url.protocol === "http:" &&
+          ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))
+      )
+    )
+      throw new Error("needSettings");
+  }
+  async function requestAI(messages, { test = false } = {}) {
+    validateConnection();
+    const config = { ...settings };
+    const controller = new AbortController();
+    activeController = controller;
+    let timeout = false;
+    const timer = setTimeout(
+      () => {
+        timeout = true;
+        controller.abort();
+      },
+      test ? 30000 : 150000,
+    );
+    try {
+      let response;
+      try {
+        response = await fetch(
+          config.mode === "relay"
+            ? new URL("/api/chat", location.origin).href
+            : config.baseUrl.replace(/\/+$/, "") + "/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(config.mode === "direct"
+                ? { Authorization: `Bearer ${apiKey}` }
+                : {}),
+            },
+            body: JSON.stringify({
+              model: config.model,
+              messages,
+              temperature: 0.1,
+              max_tokens: test ? 16 : 8192,
+            }),
+            signal: controller.signal,
+            credentials: "omit",
+            referrerPolicy: "no-referrer",
+            redirect: "error",
+          },
+        );
+      } catch (e) {
+        if (controller.signal.aborted)
+          throw new Error(timeout ? "timedOut" : "cancelled");
+        throw new Error("networkError");
+      }
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        if (controller.signal.aborted)
+          throw new Error(timeout ? "timedOut" : "cancelled");
+        throw new Error(`HTTP ${response.status} · ${t("invalidResponse")}`);
+      }
+      if (!response.ok)
+        throw new Error(
+          `HTTP ${response.status} · ${String(data?.error?.message || data?.error || t("networkError")).slice(0, 500)}`,
+        );
+      const content = data.choices?.[0]?.message?.content;
+      if (typeof content !== "string" || !content.trim())
+        throw new Error("invalidResponse");
+      return content;
+    } finally {
+      clearTimeout(timer);
+      if (activeController === controller) activeController = null;
+    }
+  }
+  async function gradeOne(s) {
+    s.status = "grading";
+    s.error = "";
+    s.approved = false;
+    render();
+    if (selected) openReview(selected, true);
+    const rubric = structuredClone(C.validateRubric(w.rubric));
+    const strictness = w.strictness;
+    try {
+      const raw = w.demo
+        ? demoResult(s, w.students.indexOf(s))
+        : await requestAI(C.buildMessages(s, rubric, strictness, lang));
+      if (batch?.cancelled) throw new Error("cancelled");
+      s.result = {
+        ...C.parseResult(raw, rubric),
+        rubric,
+        signature: C.signature(rubric, strictness),
+        createdAt: new Date().toISOString(),
+        provider: w.demo
+          ? "demo"
+          : settings.mode === "relay"
+            ? "local relay"
+            : settings.model,
+        demo: w.demo,
+      };
+      s.approved = false;
+      s.status = "done";
+      audit(s, "draftLabel");
+    } catch (e) {
+      if (e.message === "cancelled") {
+        s.status = s.result ? "done" : "idle";
+      } else {
+        s.status = "error";
+        s.error = errText(e);
+      }
+    }
+    await save();
+    render();
+    if (selected) openReview(selected, true);
+  }
+  async function gradeBatch(list) {
+    if (busy) return toast(t("busy"));
+    if (!list.length) return toast(t("noPending"));
+    try {
+      C.validateRubric(w.rubric);
+      if (!w.demo) validateConnection();
+    } catch (e) {
+      toast(errText(e));
+      if (e.message === "needSettings") {
+        closeDialog();
+        view = "settings";
+        render();
+      }
+      return;
+    }
+    busy = true;
+    batch = { done: 0, total: list.length, current: "", cancelled: false };
+    try {
+      for (const s of list) {
+        if (batch.cancelled) break;
+        batch.current = s.name;
+        await gradeOne(s);
+        batch.done++;
+        render();
+        if (w.demo) await new Promise((r) => setTimeout(r, 180));
+      }
+    } finally {
+      const stopped = batch.cancelled;
+      batch = null;
+      busy = false;
+      render();
+      if (selected) openReview(selected, true);
+      toast(t(stopped ? "cancelled" : "done"));
+    }
+  }
+  function download(content, type, name) {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 20000);
+  }
+  const fileName = (str) =>
+    (str || "gradeflow")
+      .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_")
+      .slice(0, 80);
+  function showExport() {
+    showDialog(
+      dialogHeading(t("exportTitle")) +
+        `<div class="dialog-body"><p>${t("exportHelp")}</p><label class="radio-option"><input type="radio" name="export-scope" value="approved" checked>${t("exportApproved")}</label><label class="radio-option"><input type="radio" name="export-scope" value="all">${t("exportDraft")}</label></div><div class="dialog-footer">${button("close", t("cancel"))}${button("download-csv", t("export"), "download", "primary")}</div>`,
+    );
+  }
+  function exportCSV(scope) {
+    const list = w.students.filter((s) =>
+      scope === "all" ? !!s.result : eligible(s),
+    );
+    if (!list.length) return toast(t("nothingExport"));
+    const qs = [
+      ...new Set(list.flatMap((s) => s.result.items.map((q) => q.no))),
+    ];
+    const rows = [
+      [
+        t("student"),
+        t("scoreOf"),
+        t("maxPoints"),
+        t("reviewStatus"),
+        t("source"),
+        ...qs.map((q) => "Q" + q),
+        t("feedback"),
+      ],
+      ...list.map((s) => {
+        const sum = C.totals(s);
+        return [
+          s.name,
+          sum.complete ? sum.score : "",
+          sum.max,
+          t(studentStatus(s) === "approved" ? "confirmed" : studentStatus(s)),
+          t(s.result.demo ? "demoLabel" : "realLabel"),
+          ...qs.map(
+            (no) => s.result.items.find((q) => q.no === no)?.score ?? "",
+          ),
+          s.result.overall,
+        ];
+      }),
+    ];
+    download(
+      C.csv(rows),
+      "text/csv;charset=utf-8",
+      `${fileName(w.title)}-${scope}.csv`,
+    );
+    closeDialog();
+    toast(t("exported"));
+  }
+  async function backup() {
+    download(
+      JSON.stringify(
+        {
+          format: "gradeflow",
+          version: 2,
+          exportedAt: new Date().toISOString(),
+          workspace: w,
+          templates,
+        },
+        null,
+        2,
+      ),
+      "application/json",
+      `${fileName(w.title)}-backup.json`,
+    );
+    toast(t("backedUp"));
+  }
+  async function restore(file) {
+    if (!file || busy) return;
+    if (file.size > 180 * 1024 * 1024) return toast(t("invalidBackup"));
+    try {
+      const raw = JSON.parse(await file.text());
+      const restored = C.validateBackup(raw);
+      const restoredTemplates = Array.isArray(raw.templates)
+        ? raw.templates
+            .slice(0, 100)
+            .map((r) => ({
+              id: uid(),
+              name: String(r.name || "").slice(0, 150),
+              rubric: C.validateRubric(r.rubric),
+            }))
+        : [];
+      if (w.students.length && !confirm(t("restoreConfirm"))) return;
+      w = restored;
+      templates = restoredTemplates;
+      view = "workspace";
+      filter = "all";
+      search = "";
+      closeDialog();
+      render();
+      await save();
+      toast(t("restored"));
+    } catch {
+      toast(t("invalidBackup"));
+    }
+  }
+  function printReport() {
+    const s = getStudent();
+    if (!s?.result) return;
+    const sum = C.totals(s);
+    const frame = document.createElement("iframe");
+    frame.style.cssText =
+      "position:fixed;left:-10000px;top:0;width:800px;height:1000px;border:0";
+    frame.title = t("printReport");
+    document.body.appendChild(frame);
+    const html = `<!doctype html><html lang="${lang === "en" ? "en" : "zh-CN"}"><head><meta charset="utf-8"><title>${esc(s.name)} · ${esc(t("personalFeedback"))}</title><style>body{font:14px/1.7 system-ui,sans-serif;color:#273a31;max-width:850px;margin:35px auto;padding:20px}h1{font-size:25px}h2{font-size:18px}p{white-space:pre-wrap}table{border-collapse:collapse;width:100%;font-size:12px}th,td{border:1px solid #dce3d6;padding:10px;text-align:left;vertical-align:top;white-space:pre-wrap;overflow-wrap:anywhere}th{background:#f1f5ea}.meta{color:#78866c}.status{padding:12px;background:#f1f5ea}tr{break-inside:avoid}@media print{body{margin:0;padding:8mm}@page{size:A4;margin:12mm}}</style></head><body><p class="meta">GradeFlow · ${esc(t("personalFeedback"))}</p><h1>${esc(w.title || t("defaultTitle"))}</h1><h2>${esc(s.name)} · ${sum.complete ? sum.score : "—"} / ${sum.max}</h2><p class="status">${esc(t(eligible(s) ? "confirmed" : "reportDraft"))}${isStale(s) ? " · " + t("stale") : ""}${s.result.demo ? " · " + t("demoLabel") : ""}</p><table><thead><tr><th>${t("questionNo")}</th><th>${t("aiScore")}</th><th>${t("teacherScore")}</th><th>${t("maxPoints")}</th><th>${t("feedback")}</th></tr></thead><tbody>${s.result.items.map((q) => `<tr><td>${esc(q.no)}</td><td>${q.aiScore ?? "—"}</td><td>${q.score ?? "—"}</td><td>${q.max}</td><td>${esc(q.note || q.comment)}</td></tr>`).join("")}</tbody></table><h2>${t("feedback")}</h2><p>${esc(s.result.overall)}</p><p class="meta">${esc(t("rubricName"))}: ${esc(s.result.rubric.title)}<br>${esc(new Date(s.result.createdAt).toLocaleString(lang === "en" ? "en-US" : "zh-CN"))}</p></body></html>`;
+    frame.onload = () => {
+      frame.contentWindow.focus();
+      frame.contentWindow.print();
+    };
+    frame.srcdoc = html;
+    setTimeout(() => frame.remove(), 120000);
+  }
+  function editRubric() {
+    w.students.forEach((s) => {
+      if (s.result) s.approved = false;
+    });
+    saveState = "saving";
+    updateSave();
+    clearTimeout(draftSaveTimer);
+    draftSaveTimer = setTimeout(save, 300);
+  }
+  const guarded = new Set([
+    "demo",
+    "new-batch",
+    "add-student",
+    "upload",
+    "add-pages",
+    "grade-one",
+    "grade-pending",
+    "delete-student",
+    "rotate",
+    "remove-page",
+    "approve",
+    "unapprove",
+    "load-rubric",
+    "add-question",
+    "remove-question",
+    "save-template",
+    "use-template",
+    "delete-template",
+    "import-rubric",
+    "connection-mode",
+    "save-settings",
+    "test-connection",
+    "clear-key",
+    "restore",
+  ]);
+  async function handleAction(el) {
+    const action = el.dataset.action;
+    if (el.disabled) return;
+    if (busy && guarded.has(action)) return toast(t("busy"));
+    try {
+      switch (action) {
+        case "view":
+          view = el.dataset.view;
+          render();
+          break;
+        case "language":
+          lang = lang === "en" ? "zh" : "en";
+          try {
+            const url = new URL(location.href);
+            url.searchParams.set("lang", lang);
+            history.replaceState({}, "", url);
+          } catch {}
+          render();
+          if (selected) openReview(selected, true);
+          else if ($("#dialog").open) closeDialog();
+          break;
+        case "filter":
+          filter = el.dataset.filter;
+          render();
+          break;
+        case "demo":
+          await loadDemo();
+          break;
+        case "new-batch":
+          showNewBatch();
+          break;
+        case "add-student":
+          addStudentDialog();
+          break;
+        case "upload":
+          uploadTarget = null;
+          $("#papers-input").click();
+          break;
+        case "add-pages":
+          uploadTarget = selected;
+          $("#papers-input").click();
+          break;
+        case "review":
+          openReview(el.dataset.id);
+          break;
+        case "close":
+          closeDialog();
+          break;
+        case "prev-student":
+        case "next-student": {
+          const idx =
+            w.students.indexOf(getStudent()) +
+            (action === "prev-student" ? -1 : 1);
+          if (w.students[idx]) openReview(w.students[idx].id);
+          break;
+        }
+        case "page":
+          pageIndex = Number(el.dataset.index);
+          openReview(selected, true);
+          break;
+        case "zoom-in":
+        case "zoom-out":
+          zoom = Math.max(
+            0.5,
+            Math.min(3, C.round(zoom + (action === "zoom-in" ? 0.25 : -0.25))),
+          );
+          openReview(selected, true);
+          break;
+        case "rotate": {
+          const s = getStudent();
+          if (!s?.pages.length) break;
+          if (s.result && !confirm(t("changePaper"))) break;
+          const p = s.pages[pageIndex];
+          const im = new Image();
+          im.src = p.dataUrl;
+          await im.decode();
+          const can = document.createElement("canvas");
+          can.width = im.height;
+          can.height = im.width;
+          const ctx = can.getContext("2d");
+          ctx.translate(can.width / 2, can.height / 2);
+          ctx.rotate(Math.PI / 2);
+          ctx.drawImage(im, -im.width / 2, -im.height / 2);
+          p.dataUrl = can.toDataURL("image/jpeg", 0.95);
+          invalidatePaper(s);
+          await save();
+          render();
+          openReview(s.id, true);
+          break;
+        }
+        case "remove-page": {
+          const s = getStudent();
+          if (s.result && !confirm(t("changePaper"))) break;
+          s.pages.splice(pageIndex, 1);
+          invalidatePaper(s);
+          save();
+          render();
+          openReview(s.id, true);
+          break;
+        }
+        case "delete-student":
+          if (confirm(t("deleteConfirm"))) {
+            w.students = w.students.filter((s) => s.id !== selected);
+            closeDialog();
+            save();
+            render();
+          }
+          break;
+        case "grade-pending":
+          await gradeBatch(
+            w.students.filter(
+              (s) =>
+                s.pages.length &&
+                (!s.result || isStale(s) || s.status === "error"),
+            ),
+          );
+          break;
+        case "grade-one": {
+          const s = getStudent();
+          if (!s?.pages.length) break;
+          if (s.result && !confirm(t("regradeConfirm"))) break;
+          await gradeBatch([s]);
+          break;
+        }
+        case "stop":
+          if (batch) {
+            batch.cancelled = true;
+            activeController?.abort();
+          }
+          break;
+        case "approve":
+        case "unapprove": {
+          const s = getStudent();
+          if (!s?.result || isStale(s) || !C.totals(s).complete) break;
+          s.approved = action === "approve";
+          audit(s, s.approved ? "approved" : "unapprove");
+          save();
+          render();
+          openReview(s.id, true);
+          toast(t(s.approved ? "approvedToast" : "editedToast"));
+          break;
+        }
+        case "load-rubric":
+          if (w.rubric.questions.length && !confirm(t("rubricChanged"))) break;
+          w.rubric = sampleRubric();
+          editRubric();
+          render();
+          break;
+        case "add-question":
+          if (w.rubric.questions.length >= 100) break;
+          {
+            let num = w.rubric.questions.length + 1;
+            while (w.rubric.questions.some((q) => q.no === String(num))) num++;
+            w.rubric.questions.push({ no: String(num), max: 10, criteria: "" });
+            editRubric();
+            render();
+          }
+          break;
+        case "remove-question":
+          w.rubric.questions.splice(Number(el.dataset.index), 1);
+          editRubric();
+          render();
+          break;
+        case "save-template": {
+          const rubric = C.validateRubric(w.rubric);
+          if (templates.length >= 100) throw new Error("invalidRubric");
+          templates.push({
+            id: uid(),
+            name: rubric.title || t("rubricName"),
+            rubric,
+          });
+          await save();
+          render();
+          toast(t("templateSaved"));
+          break;
+        }
+        case "use-template": {
+          const r = templates.find((x) => x.id === el.dataset.id);
+          if (r) {
+            w.rubric = structuredClone(r.rubric);
+            editRubric();
+            render();
+          }
+          break;
+        }
+        case "delete-template":
+          templates = templates.filter((x) => x.id !== el.dataset.id);
+          save();
+          render();
+          break;
+        case "import-rubric":
+          $("#rubric-input").click();
+          break;
+        case "connection-mode":
+          collectSettings();
+          settings.mode = el.dataset.mode;
+          save();
+          render();
+          break;
+        case "save-settings":
+          collectSettings();
+          await save();
+          toast(t("settingsSaved"));
+          break;
+        case "clear-key":
+          apiKey = "";
+          render();
+          toast(t("keyCleared"));
+          break;
+        case "test-connection": {
+          collectSettings();
+          const output = $("#connection-result");
+          output.textContent = t("testing");
+          busy = true;
+          el.disabled = true;
+          try {
+            await requestAI([{ role: "user", content: "Reply with OK." }], {
+              test: true,
+            });
+            output.textContent = t("testSuccess");
+          } catch (e) {
+            output.textContent = errText(e);
+          } finally {
+            busy = false;
+            el.disabled = false;
+          }
+          break;
+        }
+        case "export":
+          showExport();
+          break;
+        case "download-csv":
+          exportCSV($('input[name="export-scope"]:checked').value);
+          break;
+        case "backup":
+          await backup();
+          break;
+        case "restore":
+          $("#backup-input").click();
+          break;
+        case "print":
+          printReport();
+          break;
+      }
+    } catch (e) {
+      toast(errText(e));
+    }
+  }
+  document.addEventListener("click", (e) => {
+    const el = e.target.closest("[data-action]");
+    if (el) {
+      e.preventDefault();
+      handleAction(el);
+    }
+  });
+  document.addEventListener("submit", async (e) => {
+    if (e.target.id === "new-batch-form") {
+      e.preventDefault();
+      if (busy) return;
+      const title = $("#batch-title").value.trim();
+      if (!title) return;
+      w = {
+        ...emptyWorkspace(),
+        rubric: w.rubric,
+        strictness: w.strictness,
+        title,
+        className: $("#batch-class").value.trim(),
+      };
+      view = "workspace";
+      filter = "all";
+      search = "";
+      closeDialog();
+      render();
+      await save();
+    }
+    if (e.target.id === "add-student-form") {
+      e.preventDefault();
+      if (busy) return;
+      if (w.students.length >= 500) return toast(t("invalidBackup"));
+      const name = $("#new-student-name").value.trim();
+      if (!name) return;
+      const s = newStudent(name);
+      w.students.push(s);
+      closeDialog();
+      view = "workspace";
+      render();
+      save();
+      openReview(s.id);
+    }
+  });
+  document.addEventListener("input", (e) => {
+    const el = e.target;
+    if (el.id === "search") {
+      search = el.value;
+      $("#student-table").innerHTML = tableHTML();
+      return;
+    }
+    if (busy) return;
+    if (el.dataset.rubricField) {
+      w.rubric[el.dataset.rubricField] = el.value;
+      editRubric();
+    }
+    if (el.dataset.qfield) {
+      const q = w.rubric.questions[Number(el.dataset.qindex)];
+      q[el.dataset.qfield] =
+        el.dataset.qfield === "max"
+          ? Number.isFinite(el.valueAsNumber)
+            ? el.valueAsNumber
+            : 0
+          : el.value;
+      editRubric();
+      $("#rubric-total").textContent = C.round(
+        w.rubric.questions.reduce((a, q) => a + (Number(q.max) || 0), 0),
+      );
+    }
+    if (el.id === "api-key") apiKey = el.value.trim();
+  });
+  document.addEventListener("change", async (e) => {
+    const el = e.target;
+    if (busy) return;
+    if (el.id === "strictness") {
+      w.strictness = el.value;
+      editRubric();
+    }
+    if (el.id === "provider") {
+      settings.provider = el.value;
+      settings.baseUrl = providers[el.value];
+      settings.model = "";
+      apiKey = "";
+      render();
+      save();
+    }
+    if (["base-url", "model"].includes(el.id)) {
+      collectSettings();
+      save();
+    }
+    if (el.id === "student-name") {
+      const s = getStudent();
+      if (s) {
+        s.name = el.value.trim() || s.name;
+        save();
+        render();
+      }
+    }
+    if (el.dataset.score !== undefined) {
+      const s = getStudent();
+      const q = s?.result?.items[Number(el.dataset.score)];
+      if (!q || isStale(s)) return;
+      const value = el.value.trim() === "" ? null : el.valueAsNumber;
+      if (
+        value !== null &&
+        (!Number.isFinite(value) || value < 0 || value > q.max)
+      ) {
+        el.value = q.score ?? "";
+        toast(t("invalidScore"));
+        return;
+      }
+      audit(s, "adjusted", { no: q.no, from: q.score, to: value });
+      q.score = value === null ? null : C.round(value);
+      q.adjusted = q.score !== q.aiScore;
+      s.approved = false;
+      save();
+      render();
+      updateReviewAfterEdit(s);
+      const title = el
+        .closest(".question-result")
+        .querySelector(".question-title>div");
+      let adjusted = title.querySelector(".badge.approved");
+      if (q.adjusted && !adjusted)
+        title.insertAdjacentHTML(
+          "beforeend",
+          ` <span class="badge approved">${t("adjusted")}</span>`,
+        );
+      else if (!q.adjusted && adjusted) adjusted.remove();
+    }
+    if (el.dataset.note !== undefined) {
+      const s = getStudent();
+      if (!s?.result || isStale(s)) return;
+      s.result.items[Number(el.dataset.note)].note = el.value;
+      s.approved = false;
+      audit(s, "teacherNote", {
+        no: s.result.items[Number(el.dataset.note)].no,
+      });
+      save();
+      render();
+      updateReviewAfterEdit(s);
+    }
+  });
+  $("#papers-input").addEventListener("change", async (e) => {
+    const files = Array.from(e.target.files);
+    e.target.value = "";
+    await importFiles(files, uploadTarget);
+  });
+  $("#backup-input").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    await restore(file);
+  });
+  $("#rubric-input").addEventListener("change", async (e) => {
+    const f = e.target.files[0];
+    e.target.value = "";
+    if (!f || busy) return;
+    if (f.size > 100000) return toast(t("fileTooLarge"));
+    w.rubric.instructions = (await f.text()).slice(0, 20000);
+    editRubric();
+    render();
+  });
+  document.addEventListener("dragover", (e) => {
+    if (e.target.closest(".dropzone") || e.target.closest(".paper-view")) {
+      e.preventDefault();
+      e.target.closest(".dropzone")?.classList.add("dragover");
+    }
+  });
+  document.addEventListener("dragleave", (e) =>
+    e.target.closest(".dropzone")?.classList.remove("dragover"),
+  );
+  document.addEventListener("drop", (e) => {
+    const target = e.target.closest(".dropzone,.paper-view");
+    if (target) {
+      e.preventDefault();
+      target.classList.remove("dragover");
+      importFiles(
+        Array.from(e.dataTransfer.files),
+        target.classList.contains("paper-view") ? selected : null,
+      );
+    }
+  });
+  document.addEventListener("paste", (e) => {
+    if (!selected || busy || ["INPUT", "TEXTAREA"].includes(e.target.tagName))
+      return;
+    const files = Array.from(e.clipboardData.files).filter((f) =>
+      f.type.startsWith("image/"),
+    );
+    if (files.length) {
+      e.preventDefault();
+      importFiles(files, selected);
+    }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName)) return;
+    if (e.key === "Enter" && e.target.matches(".dropzone")) {
+      e.preventDefault();
+      handleAction(e.target);
+    }
+    if (
+      selected &&
+      $("#dialog").open &&
+      ["ArrowLeft", "ArrowRight"].includes(e.key)
+    ) {
+      e.preventDefault();
+      const i =
+        w.students.indexOf(getStudent()) + (e.key === "ArrowLeft" ? -1 : 1);
+      if (w.students[i]) openReview(w.students[i].id);
+    }
+  });
+  $("#dialog").addEventListener("close", () => {
+    if (!$("#dialog").open) selected = null;
+  });
+  window.addEventListener("beforeunload", (e) => {
+    if (busy || saveState === "saving" || saveState === "saveFailed") {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+  });
+  render();
+})();

@@ -1,0 +1,20 @@
+name: Teacher feedback / 教师反馈
+description: Share a classroom workflow or improvement request / 提交教学使用需求
+body:
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Classroom workflow / 使用场景
+      description: Describe your subject, question types and what you are trying to do. Do not include student names or identifiable papers.
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is difficult today? / 目前哪一步不方便？
+    validations:
+      required: true
+  - type: textarea
+    id: desired
+    attributes:
+      label: Desired outcome / 希望怎样改进？
