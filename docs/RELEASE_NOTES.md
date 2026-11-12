@@ -1,29 +1,34 @@
-# GradeFlow v2.1.0 · 阅卷有方
+# GradeFlow v2.2.0 · 阅卷有方
 
-Reusable bilingual feedback and question-by-question review, in the same Chinese/English repository.
+Class and assessment history management, plus ready-to-record demonstration materials.
 
 ## 中文
 
-- **常用评语库**：内置 9 条可编辑中英评语，按表扬、待改进、学习建议分类；支持自定义、搜索、收藏、编辑和删除。
-- **一键追加评语**：按当前界面语言追加到某一道题，保留原有反馈并防止重复插入。修改模板不会改动已经给学生的反馈。
-- **按题批改不同学生**：固定题号，使用学生列表或方向键连续切换；支持待复核 / 重点核对筛选、逐题进度和「确认本题并下一位」。
-- **逐题确认**：所有题目有得分且经过教师复核，整卷才确认为正式成绩。修改分数或评语时，仅撤销该题的确认及整卷审批，保留其他题目的进度。
-- **保存与兼容**：评语、收藏、逐题进度纳入本机保存和 JSON 备份。兼容 v2.0 数据，旧备份缺少评语库时保留当前库。
-- 中英文界面、说明文档、使用指南和手机布局同步更新。新增功能不额外调用 AI。
+- **班级管理**：新建、重命名、备注；考试可调整所属班级。只允许删除空班级，避免误删整班记录。
+- **历史考试**：每场考试独立保存试卷、评分标准、分数、评语与复核进度。新建考试或体验示例时保留旧记录，支持可选复用评分标准。
+- **查找与整理**：按班级筛选、搜索考试或日期、排序、归档与取消归档；工作台可快速切换考试。
+- **完整备份**：单场备份导入为新考试；全部班级备份包含归档、模板与评语库，确认后可恢复整个资料库。
+- **数据保护**：自动迁移 v2.0/v2.1 工作区；保存失败时不切换考试；阻止过期标签页覆盖新记录；空间不足时仍可导出全量备份。
+- **中英文同步**：界面、README、使用指南与截图均已更新。
+- **录屏材料**：附 B 站 6–7 分钟操作口播、60 秒精简版、可复制简介、英文演示指南和虚构中英文示例试卷。
 
-在线体验：[中文版](https://jianshengchuanchaun.github.io/paper-grading-assistant/zh/) · [English](https://jianshengchuanchaun.github.io/paper-grading-assistant/en/)。点击「体验示例」，即可测试新功能。
+在线体验：[中文版](https://jianshengchuanchaun.github.io/paper-grading-assistant/zh/) · [English](https://jianshengchuanchaun.github.io/paper-grading-assistant/en/)
+
+[完整 B 站讲稿](https://github.com/jianshengchuanchaun/paper-grading-assistant/blob/main/docs/BILIBILI_SCRIPT.zh-CN.md) · [虚构演示素材](https://github.com/jianshengchuanchaun/paper-grading-assistant/tree/main/docs/demo-materials)
 
 ## English
 
-- **Comment bank:** nine editable bilingual starters, custom entries, categories, search, favorites and CRUD.
-- **Append feedback:** insert the current language into one question without replacing existing notes or repeating the same comment. Template edits never change previously applied feedback.
-- **Review by question:** keep one question fixed across students, navigate with the roster or arrow keys, filter pending/flagged answers, track progress and confirm the current question before moving to the next unreviewed student.
-- **Question-level confirmation:** a complete paper is approved only after every question is reviewed. Score/feedback edits revoke the affected question and paper approval while preserving other question confirmations.
-- **Persistence and compatibility:** save comments, favorites and question progress locally and in JSON backups. v2.0 workspaces migrate, and older backups without a bank preserve the current library.
-- Updated Chinese/English interfaces, guides, README files and mobile layouts. The new features make no additional AI calls.
+- Create and rename classes, add notes, and move assessments between classes. Only empty classes can be deleted.
+- Preserve independent papers, rubrics, grades and review progress for every assessment. New assessments and demos keep previous records; rubric reuse is optional.
+- Filter by class, search names/dates, sort, archive/unarchive and switch assessments from the workspace.
+- Back up one assessment or the complete library. Single imports add assessments; complete restores replace the library after validation and confirmation.
+- Migrate v2.0/v2.1 storage, block switching after failed saves and reject conflicting writes from other tabs. Full backup also works after quota write failures.
+- Updated bilingual interfaces/documentation, a recording walkthrough and clearly fictional upload samples.
 
-## Validation and downloads
+## Validation and use
 
-22 Node tests and 9 Edge browser workflows passed. JavaScript syntax, static build, desktop/mobile layouts, old-data migration and backup round-trips were verified. This release tests the workflow, not real-model grading accuracy; no paid AI provider or teacher-marked benchmark was used.
+26 Node tests and 14 Edge browser workflows passed. Migration, independent assessments, full backup restoration, tab conflicts and failed-save recovery were tested. Real-model grading accuracy and maximum storage capacity have not been measured.
 
-The static ZIP contains the full browser app and bundled PDF.js. Use HTTP/HTTPS for PDF imports. The source ZIP includes the server, tests and documentation; run `npm ci`, `npm run build`, then `npm start`. The repository's `gh-pages` branch serves both language entries.
+Records remain in the current browser. Publishing to GitHub does not upload teacher data or provide cloud synchronization; back up before moving devices. Up to 200 classes and 200 assessments, subject to browser storage capacity.
+
+The source ZIP contains the app, local server, tests, bilingual docs and recording materials. Run `npm ci`, `npm run build`, then `npm start`. The static ZIP contains the browser app and bundled PDF.js; serve it over HTTP/HTTPS for PDF imports.

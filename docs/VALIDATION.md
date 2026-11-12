@@ -1,14 +1,14 @@
 # Release validation / 发布验证
 
-Date: 2026-11-12 · Version: 2.1.0
+Date: 2026-11-13 · Version: 2.2.0
 
 ## Verified locally
 
 - JavaScript syntax checks and static build succeeded on Node.js 24.14.1 / Windows.
-- 22 Node tests passed: scoring bounds, question matching, missing answers, stale rubrics, CSV escaping, backup validation and round-trip, localization coverage, prompt boundaries, and local relay restrictions/forwarding. New checks cover bilingual comment validation and limits, duplicate-safe appending, per-question approval/invalidation, eligible review queues, v2.0 migration, attention flags and rejection of model-supplied review flags.
-- 9 Edge browser workflow tests passed. The six existing workflows cover Chinese/English UI, teacher edits, approval and refresh persistence, rubric invalidation, queue skipping, image import, mocked provider responses, CSV export, secret exclusion, two-page PDF rendering and backup validation. Three new workflows cover comment CRUD/search/favorites, language-specific insertion, duplicate prevention, template independence, HTML escaping, bank backup/restore, fixed-question student navigation, confirm-and-next, progress persistence, incomplete-score blocking, all-question approval, pending/flagged filters, stale exclusion and old-backup compatibility.
+- 26 Node tests passed, covering scoring, validation, CSV safety, prompt boundaries, localization, feedback and review state, relay restrictions, class catalog identities/references, assessment dates, old-workspace migration, full-library validation and history summaries.
+- 14 Edge browser workflows passed. The nine previous workflows continue to cover grading, PDF import, comments, per-question review, persistence and backups. Five additional workflows cover Chinese/English class creation and renaming, independent assessments and rubrics, moving and archiving records, filtering/sorting, reload persistence, complete-library round-trip, additive old-backup import, invalid-archive rejection, deletion boundaries, actual v2.1 IndexedDB migration, concurrent-tab conflict rejection and failed-save behavior. A simulated quota error also verifies that full backup remains available.
 - Desktop review actions are asserted visible within the viewport. A 390-pixel viewport is checked for page-level horizontal overflow.
-- Desktop Chinese, desktop English, comment library, question review and 390-pixel mobile screenshots were inspected during implementation. English question-review screenshots use fictional English demo content.
+- Desktop Chinese/English class-history layouts, comment library, question review and 390-pixel mobile screenshots were inspected. The standalone fictional upload samples and Bilibili walkthrough were checked against the current interface. A multiline demo question was adjusted to keep its complete prompt above the answer.
 - GitHub Pages built successfully from the `gh-pages` branch. Chinese/English entry points and bundled PDF resources are checked after deployment.
 
 ## What these checks do not prove
@@ -17,6 +17,6 @@ Date: 2026-11-12 · Version: 2.1.0
 - No teacher-marked dataset was evaluated. There is no measured accuracy, fairness, or time-saving claim.
 - Local browser tests ran in Microsoft Edge. An optional CI template is provided for Chromium on Linux; it is not active in this release. Safari/Firefox and phone hardware are not yet independently verified.
 - PDF validation used a generated two-page text PDF. Complex scans, unusual fonts, handwritten diagrams and encrypted PDFs require further corpus testing.
-- Storage quota limits and maximum class size were not stress-tested.
+- Real storage exhaustion and maximum class size were not stress-tested. Failure handling was verified by injecting a quota write error; this does not measure device capacity.
 
 The automated tests are included in `tests/`. Release screenshots show fictional generated papers only.

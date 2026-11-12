@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.2.0 — 2026-11-13
+
+- Added class management and saved assessment history: create/rename classes, create/edit/move assessments, search/sort, archive/unarchive, and delete with explicit confirmation.
+- New assessments and demos preserve previous work. Rubric reuse is optional; students, scores and review progress remain separate.
+- Store each assessment separately in IndexedDB; migrate the former v2.0/v2.1 single workspace without losing papers or review state.
+- Added current-assessment switching, per-assessment backup and complete class-library backup. Single backups import additively; full restore validates all records and replaces them atomically.
+- Prevent switching after a failed save and reject stale writes from other tabs. Full backup remains available after quota write failures.
+- Updated Chinese/English interfaces, guides, documentation and screenshots. Added a Chinese Bilibili recording script, English walkthrough and fictional upload samples.
+
 ## 2.1.0 — 2026-11-12
 
 - Added a bilingual reusable comment library with nine editable starters, categories, search, favorites, and local CRUD.

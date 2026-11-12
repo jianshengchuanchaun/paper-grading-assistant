@@ -12,13 +12,14 @@ Upload a student's paper, apply your own rubric, review the suggested marks alon
 
 ## What works today
 
+- **Classes and assessment history:** keep separate papers, rubrics, grades and review progress for each assessment. Create/rename classes, move assessments, search, archive/unarchive and resume work without replacing previous records.
 - **Teacher-controlled rubrics:** explicit question IDs, maximum points, scoring criteria, reusable templates, and additional instructions.
 - **Images and PDFs:** JPG, PNG, WebP, multi-page PDF, drag and drop, and image paste inside a student's review. PDF pages render locally using bundled PDF.js.
 - **A focused review workspace:** original paper and marks side by side, zoom, page rotation, editable scores and comments, original AI scores, and an edit history.
 - **Review by question:** keep one question in focus while switching students, filter pending or flagged answers, and confirm a question before moving to the next unreviewed student. A paper becomes approved when every question is reviewed.
 - **Bilingual comment bank:** nine editable starter comments, your own Chinese/English feedback, three categories, search and favorites. Append feedback to a question without replacing existing notes or changing scores.
 - **Review before reporting:** incomplete answers stay unscored; official exports and class statistics only use complete, current, teacher-approved results.
-- **Resumable local work:** papers, scores, templates, reusable comments and per-question review progress persist in IndexedDB. Export/import a JSON workspace backup, including pages and edit history. Existing v2.0 workspaces remain compatible.
+- **Resumable local work:** each assessment persists separately in IndexedDB; templates and comments are shared. Export one assessment or the entire class library. v2.0/v2.1 workspaces migrate automatically. Conflicting writes from another tab are blocked.
 - **Class insights:** score distribution, pass rate, per-question performance, and lower-scoring questions to discuss in class.
 - **Useful outputs:** Excel-compatible CSV with formula-injection protection; individual printable feedback that can be saved as PDF through the browser's print dialog.
 - **Your choice of model:** vision-capable OpenAI-compatible Chat Completions APIs, editable URL and model ID, plus an optional local relay for providers that do not allow browser calls.
@@ -39,7 +40,7 @@ Open [the local workspace](http://localhost:4173/), [the English version](http:/
 
 For a real class:
 
-1. Create a batch and add a rubric. Enter each question's ID, maximum points and scoring criteria. Text imports add supplemental instructions; they do not automatically extract a question list.
+1. Open **Classes & history**, create a class, then create an assessment with **New batch**. Existing records remain in history. Enter a rubric, reuse the current one, or use a saved template. Text imports add supplemental instructions; they do not extract a question list automatically.
 2. Import papers. **Each file creates one student; each PDF must contain one student's work.** Open a student to add more pages to the same paper.
 3. Configure a vision model in **AI settings**. A successful connection test checks text connectivity; use a sample paper to verify vision capability.
 4. Select **Grade pending**. The queue runs sequentially, supports stopping, and keeps completed results. Existing successful results are skipped. Individual regrading requires an explicit replacement confirmation.
@@ -59,6 +60,27 @@ After generating AI drafts, choose **By question**, select a question ID, and us
 ![Question review in English](docs/question-review-en.png)
 
 Confirming one question does not approve the entire paper. Every question must be reviewed and scored under the current rubric. Changing a score or feedback clears that question's confirmation and the paper's approval, keeping other question confirmations. Both new features work locally and make no extra AI calls. JSON backups include the bank and review progress; restoring an older backup without a bank keeps your current comments.
+
+## Classes, history and backups
+
+![Classes and assessment history](docs/library-en.png)
+
+Use **Classes & history** to organize classes and assessments. A new assessment can reuse the current rubric, but starts without students or grades. Existing assessments stay intact. Switch using the workspace selector or **Open assessment** on a history card. You can rename classes, edit an assessment's name/date/class, search by name or date, sort by save time or assessment date, and archive completed work. Archiving is a list filter, not deletion or a read-only lock; open archived work from the Archived list to continue editing.
+
+| Action | What it does |
+| --- | --- |
+| Back up current assessment / Back up assessment | Downloads one assessment, pages, review history, templates and comment bank as a version-2 JSON backup. |
+| Back up all classes | Downloads every class and assessment, including archived work, shared templates and comments, as a version-3 JSON backup. It does not require an extra write, so it remains usable after a storage-quota failure. |
+| Restore a single-assessment backup | Adds a new assessment without removing existing ones; restores the included shared templates/comments. A missing comment bank leaves the current bank intact. |
+| Restore an all-classes backup | Replaces the complete local library after confirmation. The archive is validated before one atomic write. Back up records you want to keep first. |
+| Delete assessment | Permanently removes that assessment after confirmation. Switch away from the current assessment before deleting it. |
+| Delete empty class | Allowed only when the class contains no assessments, including archived ones. |
+
+Data remains in this browser and origin. Publishing the app to GitHub does **not** upload teacher records or sync devices. The online Chinese/English entries share storage in the same browser; local hosting, another browser/profile, or another computer has separate storage. Use all-class backup/restore to move work. Clearing site data or using a temporary browser profile can remove records. A second tab that has stale data must reload before it can save, preventing silent overwrites.
+
+The catalog supports up to 200 classes and 200 assessments; each assessment retains the existing 500-student and 20-page-per-student limits. Browser storage capacity is the practical limit. Backup import is capped at 180 MB. No large-class stress test or cloud synchronization is claimed.
+
+For a recording walkthrough, see the [English demo guide](docs/DEMO_GUIDE.en.md), [Chinese Bilibili recording script](docs/BILIBILI_SCRIPT.zh-CN.md), and [fictional sample papers](docs/demo-materials/README.md).
 
 ## Connecting an AI service
 
@@ -92,7 +114,7 @@ Restart `npm start`, then select **Local relay (.env)** in settings. The relay l
 
 ## Current limits
 
-One active batch per browser origin; use backups to archive batches. Up to **500 students**, **100 questions**, **20 pages per student**, **25 MB per input file**, and **180 MB per imported backup**. Actual capacity depends on browser storage and device memory. The local relay accepts up to 30 MB per request; API providers may impose lower limits. Images are reduced to a maximum edge of 1900 pixels.
+Multiple saved assessments per browser origin, with one selected at a time. Per-assessment limits are **500 students**, **100 questions**, and **20 pages per student**; input files are limited to **25 MB**, and imported backups to **180 MB**. Actual capacity depends on browser storage and device memory. The local relay accepts up to 30 MB per request; API providers may impose lower limits. Images are reduced to a maximum edge of 1900 pixels.
 
 Not implemented: automatic separation of mixed-student scan bundles, OCR editing before scoring, on-paper annotation, LMS synchronization, live collaboration, automatic rubric extraction, server-side accounts, or a validated grading benchmark. Password-protected PDFs need to be unlocked before import. HEIC requires conversion to JPG/PNG.
 
@@ -111,6 +133,7 @@ For Linux/macOS UI tests, install the Playwright browser once with `npx playwrig
 ```text
 assets/app.js       UI, local persistence, import, grading queue and reports
 assets/core.js      Scoring validation, prompt construction, backup and CSV rules
+assets/library.js   Class catalog, archive validation and atomic IndexedDB operations
 assets/i18n.js      Chinese and English UI strings
 assets/comments.js  Editable bilingual starter feedback
 assets/styles.css  Responsive workspace and review interface
