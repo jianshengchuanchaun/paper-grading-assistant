@@ -88,6 +88,11 @@
   };
   let apiKey = "",
     templates = [],
+    commentBank = structuredClone(window.GradeCommentDefaults),
+    commentSearch = "",
+    commentCategory = "all",
+    favoritesOnly = false,
+    editingComment = null,
     view = "workspace",
     filter = "all",
     search = "";
@@ -95,6 +100,11 @@
     pageIndex = 0,
     zoom = 1,
     uploadTarget = null;
+  let reviewMode = "student",
+    activeQuestion = "",
+    questionFilter = "all";
+  const pageMemory = new Map();
+  let displayedPageKey = null;
   let busy = false,
     batch = null,
     activeController = null,
@@ -125,7 +135,7 @@
     s.audit = s.audit.slice(-200);
   }
   function localSnapshot() {
-    return { workspace: w, templates, settings };
+    return { workspace: w, templates, settings, commentBank };
   }
   async function openDB() {
     return new Promise((resolve, reject) => {
@@ -203,6 +213,8 @@
             .slice(0, 100)
         : [];
       const cfg = saved.settings || {};
+      if (saved.commentBank !== undefined)
+        commentBank = C.validateCommentBank(saved.commentBank);
       settings = {
         mode: cfg.mode === "relay" ? "relay" : "direct",
         provider: Object.hasOwn(providers, cfg.provider)
@@ -278,6 +290,7 @@
       <nav aria-label="${esc(t("tools"))}">${[
         ["workspace", "grid"],
         ["rubrics", "book"],
+        ["comments", "edit"],
         ["insights", "chart"],
         ["settings", "settings"],
       ]
@@ -286,8 +299,8 @@
             `<button class="nav-item ${view === key ? "active" : ""}" data-action="view" data-view="${key}" ${view === key ? 'aria-current="page"' : ""}>${icon(ico)}${t(key)}${key === "workspace" && n.total ? `<span class="nav-count">${n.total}</span>` : ""}</button>`,
         )
         .join("")}</nav>
-      <div class="sidebar-bottom"><button class="nav-item" data-action="view" data-view="help">${icon("help")}${t("help")}</button><button class="nav-item" data-action="backup">${icon("download")}${t("backup")}</button><button class="nav-item" data-action="restore">${icon("upload")}${t("restore")}</button><div class="local-card"><div class="row">${icon("shield")}<strong>${t("localFirst")}</strong></div><p>${t("localNote")}</p></div><div class="side-footer">GRADEFLOW · v2.0</div></div>
-    </aside><div class="shell"><header class="topbar"><div class="breadcrumb">${icon("book")}<span>${t("myWorkspace")}</span><span>/</span><b>${t(view)}</b></div><div class="top-actions"><span class="save-state" id="save-state"></span><button class="language" data-action="language">${t("language")}</button><span class="avatar">${lang === "en" ? "T" : "师"}</span></div></header><main id="main" class="main" tabindex="-1">${view === "workspace" ? workspaceHTML() : view === "rubrics" ? rubricsHTML() : view === "insights" ? insightsHTML() : view === "settings" ? settingsHTML() : helpHTML()}<footer class="page-footer">${t("tagline")} &nbsp;·&nbsp; GradeFlow</footer></main></div>`;
+      <div class="sidebar-bottom"><button class="nav-item" data-action="view" data-view="help">${icon("help")}${t("help")}</button><button class="nav-item" data-action="backup">${icon("download")}${t("backup")}</button><button class="nav-item" data-action="restore">${icon("upload")}${t("restore")}</button><div class="local-card"><div class="row">${icon("shield")}<strong>${t("localFirst")}</strong></div><p>${t("localNote")}</p></div><div class="side-footer">GRADEFLOW · v2.1</div></div>
+    </aside><div class="shell"><header class="topbar"><div class="breadcrumb">${icon("book")}<span>${t("myWorkspace")}</span><span>/</span><b>${t(view)}</b></div><div class="top-actions"><span class="save-state" id="save-state"></span><button class="language" data-action="language">${t("language")}</button><span class="avatar">${lang === "en" ? "T" : "师"}</span></div></header><main id="main" class="main" tabindex="-1">${view === "workspace" ? workspaceHTML() : view === "rubrics" ? rubricsHTML() : view === "comments" ? commentsHTML() : view === "insights" ? insightsHTML() : view === "settings" ? settingsHTML() : helpHTML()}<footer class="page-footer">${t("tagline")} &nbsp;·&nbsp; GradeFlow</footer></main></div>`;
     updateSave();
     if (view === "settings") {
       $("#api-key").value = apiKey;
@@ -326,7 +339,7 @@
       <div class="workflow">${["step1", "step2", "step3", "step4"].map((key, i) => `${i ? '<span class="workflow-line"></span>' : ""}<div class="workflow-step ${(i === 0 && rubricValid()) || (i === 1 && n.total) ? "complete" : ""} ${i === (n.approved ? 3 : n.total ? 2 : rubricValid() ? 1 : 0) ? "current" : ""}"><span>${(i === 0 && rubricValid()) || (i === 1 && n.total) ? "✓" : i + 1}</span>${t(key)}</div>`).join("")}</div>
       <div class="metrics">${metric("totalPapers", n.total, w.className || t("defaultClass"), "file")}${metric("graded", n.graded, t("draftLabel"), "spark")}${metric("reviewQueue", n.review, t("resultIntro"), "clock", "amber")}${metric("approved", n.approved, t("localNote"), "circleCheck", "green")}</div>
       <div class="overview-row"><section class="rubric-callout"><div><h2>${t("rubricCard")}</h2><p>${t("rubricCardText")}</p><button class="text-button" data-action="view" data-view="rubrics">${t("editRubric")}${icon("arrow")}</button></div><div class="illustration" aria-hidden="true"><div class="mini-paper back"></div><div class="mini-paper"><i></i><i></i><i></i><i></i><span class="check">✓</span></div></div></section><section class="progress-card"><div class="progress-ring" style="--progress:${progress}%"><strong>${progress}<small>%</small></strong></div><div><h3>${t("batchProgress")}</h3><p>${n.approved} / ${n.total} &nbsp;${t("confirmed")}</p><button class="text-button" data-action="filter" data-filter="review">${t("reviewQueue")}${icon("arrow")}</button></div></section></div>
-      <section aria-labelledby="submissions-heading"><div class="section-header"><div><h2 id="submissions-heading">${esc(w.title || t("batchTitle"))}<span class="count">${n.total}</span></h2><p>${rubricValid() ? `${esc(w.rubric.title || t("rubricReady"))} · ${w.rubric.questions.length} ${t("questions")} · ${totalMax} ${t("points")}` : t("batchSubtitle")}</p></div><div class="row wrap">${button("export", t("export"), "download", "", n.graded ? "" : "disabled")}${button("add-student", t("newStudent"), "plus", "", busy ? "disabled" : "")}${button(batch ? "stop" : "grade-pending", t(batch ? "stop" : "gradePending"), batch ? "stop" : "spark", "primary", !batch && busy ? "disabled" : "")}</div></div>
+      <section aria-labelledby="submissions-heading"><div class="section-header"><div><h2 id="submissions-heading">${esc(w.title || t("batchTitle"))}<span class="count">${n.total}</span></h2><p>${rubricValid() ? `${esc(w.rubric.title || t("rubricReady"))} · ${w.rubric.questions.length} ${t("questions")} · ${totalMax} ${t("points")}` : t("batchSubtitle")}</p></div><div class="row wrap">${button("review-by-question", t("byQuestion"), "book", "soft", n.graded ? "" : "disabled")}${button("export", t("export"), "download", "", n.graded ? "" : "disabled")}${button("add-student", t("newStudent"), "plus", "", busy ? "disabled" : "")}${button(batch ? "stop" : "grade-pending", t(batch ? "stop" : "gradePending"), batch ? "stop" : "spark", "primary", !batch && busy ? "disabled" : "")}</div></div>
       ${batch ? `<div class="batch-banner"><span>${t("grading")} ${batch.done} / ${batch.total}</span><progress value="${batch.done}" max="${batch.total}"></progress><span>${esc(batch.current || "")}</span></div>` : ""}
       <div class="table-card"><div class="table-toolbar"><div class="tabs" role="group" aria-label="${t("status")}">${["all", "pending", "review", "confirmed", "failed"].map((k) => `<button class="tab ${filter === k ? "active" : ""}" data-action="filter" data-filter="${k}" aria-pressed="${filter === k}">${t(k)}</button>`).join("")}</div><label class="search">${icon("search")}<input type="search" id="search" aria-label="${t("search")}" placeholder="${t("search")}" value="${esc(search)}"></label></div><div id="student-table">${tableHTML()}</div><div class="table-footer"><span>${n.total} ${t("totalPapers")} &nbsp;·&nbsp; ${t("localFirst")}</span><span>${t("resultIntro")}</span></div></div>
       <div class="dropzone" role="button" tabindex="0" data-action="upload" aria-label="${t("upload")}"><span class="upload-icon">${icon("upload")}</span><div><h3>${t("dropTitle")}</h3><p>${t("uploadHint")}</p></div><span class="btn">${t("upload")}</span></div></section>`
@@ -489,32 +502,222 @@
         `<form id="add-student-form"><div class="dialog-body field"><label for="new-student-name">${t("student")}</label><input id="new-student-name" type="text" maxlength="100" required placeholder="${t("namePlaceholder")}"></div><div class="dialog-footer">${button("close", t("cancel"), "", "", 'type="button"')}<button class="btn primary" type="submit">${t("confirm")}</button></div></form>`,
     );
   }
+  function filteredComments(query = "", category = "all", favorites = false) {
+    const needle = query.trim().toLocaleLowerCase();
+    return commentBank
+      .filter(
+        (c) =>
+          (category === "all" || c.category === category) &&
+          (!favorites || c.favorite) &&
+          (!needle || `${c.zh} ${c.en}`.toLocaleLowerCase().includes(needle)),
+      )
+      .sort((a, b) => Number(b.favorite) - Number(a.favorite));
+  }
+  function categoryOptions(selectedCategory, includeAll = true) {
+    return (
+      includeAll
+        ? ["all", "strength", "improve", "nextStep"]
+        : ["strength", "improve", "nextStep"]
+    )
+      .map(
+        (key) =>
+          `<option value="${key}" ${key === selectedCategory ? "selected" : ""}>${t(key === "all" ? "allCategories" : key)}</option>`,
+      )
+      .join("");
+  }
+  function commentCardsHTML() {
+    const entries = filteredComments(
+      commentSearch,
+      commentCategory,
+      favoritesOnly,
+    );
+    return entries.length
+      ? entries
+          .map(
+            (c) =>
+              `<article class="comment-card" data-comment-id="${esc(c.id)}"><div class="row between"><span class="badge category-${c.category}">${t(c.category)}</span><button class="btn icon-only ghost favorite-button ${c.favorite ? "is-favorite" : ""}" data-action="favorite-comment" data-id="${esc(c.id)}" aria-pressed="${c.favorite}" aria-label="${t(c.favorite ? "unfavorite" : "favorite")}">★</button></div><p>${esc(C.commentText(c, lang))}</p>${!c[lang] ? `<small class="muted">${t("fallbackLanguage")}</small>` : ""}<div class="row comment-card-actions">${button("edit-comment", t("editComment"), "edit", "sm", `data-id="${esc(c.id)}"`)}${button("delete-comment", t("delete"), "trash", "sm ghost danger", `data-id="${esc(c.id)}"`)}</div></article>`,
+          )
+          .join("")
+      : `<div class="empty"><h3>${t("commentEmpty")}</h3></div>`;
+  }
+  function commentsHTML() {
+    const c = commentBank.find((entry) => entry.id === editingComment) || {
+      id: "",
+      category: "improve",
+      zh: "",
+      en: "",
+      favorite: false,
+    };
+    return (
+      heading(
+        t("commentLibraryTitle"),
+        t("commentLibraryIntro"),
+        button("new-comment", t("newComment"), "plus", "primary"),
+      ) +
+      `<div class="comment-library-layout"><section><div class="comment-library-toolbar"><label class="search">${icon("search")}<input id="comment-search" type="search" value="${esc(commentSearch)}" placeholder="${t("commentSearch")}" aria-label="${t("commentSearch")}"></label><select id="comment-category-filter" aria-label="${t("commentCategory")}">${categoryOptions(commentCategory)}</select><label class="check-label"><input type="checkbox" id="comments-favorites" ${favoritesOnly ? "checked" : ""}>${t("favoritesOnly")}</label></div><div id="comment-cards" class="comment-cards">${commentCardsHTML()}</div></section><form id="comment-form" class="panel comment-editor"><h2>${t(c.id ? "editComment" : "newComment")}</h2><div class="field"><label for="comment-category">${t("commentCategory")}</label><select id="comment-category">${categoryOptions(c.category, false)}</select></div><div class="field"><label for="comment-zh">${t("commentChinese")}</label><textarea id="comment-zh" maxlength="600" lang="zh-CN">${esc(c.zh)}</textarea></div><div class="field"><label for="comment-en">${t("commentEnglish")}</label><textarea id="comment-en" maxlength="600" lang="en">${esc(c.en)}</textarea></div><p class="small muted">${t("commentLanguageHelp")}</p><label class="check-label"><input id="comment-favorite" type="checkbox" ${c.favorite ? "checked" : ""}>${t("favorite")}</label><div class="row"><button class="btn primary" type="submit">${icon("check")}${t("save")}</button>${c.id ? button("new-comment", t("cancel"), "", "", 'type="button"') : ""}</div></form></div>`
+    );
+  }
+  function pickerListHTML(index, query = "", category = "all") {
+    const entries = filteredComments(query, category);
+    return entries.length
+      ? entries
+          .map(
+            (c) =>
+              `<button class="comment-choice" data-action="apply-comment" data-index="${index}" data-id="${esc(c.id)}" ${busy ? "disabled" : ""}><span class="badge category-${c.category}">${c.favorite ? "★ " : ""}${t(c.category)}</span><span>${esc(C.commentText(c, lang))}</span>${!c[lang] ? `<small>${t("fallbackLanguage")}</small>` : ""}</button>`,
+          )
+          .join("")
+      : `<p class="small muted">${t("commentEmpty")}</p>`;
+  }
+  function commentPickerHTML(index, disabled) {
+    if (disabled) return "";
+    return `<details class="comment-picker" data-picker="${index}"><summary>${icon("book")}${t("comments")} <span>${t("applyComment")}</span></summary><div class="picker-filters"><input type="search" class="picker-search" aria-label="${t("commentSearch")}" placeholder="${t("commentSearch")}"><select class="picker-category" aria-label="${t("commentCategory")}">${categoryOptions("all")}</select></div><div class="picker-list">${pickerListHTML(index)}</div><button class="text-button" data-action="manage-comments">${t("manageComments")}${icon("arrow")}</button></details>`;
+  }
+  function updatePicker(picker) {
+    picker.querySelector(".picker-list").innerHTML = pickerListHTML(
+      Number(picker.dataset.picker),
+      picker.querySelector(".picker-search").value,
+      picker.querySelector(".picker-category").value,
+    );
+  }
+  function questionCardHTML(s, q, index) {
+    const disabled = busy || isStale(s) || s.status !== "done";
+    return `<article class="question-result ${q.needsReview ? "flagged" : ""}" data-question-no="${esc(q.no)}"><div class="question-title"><div><strong>${t("questionNo")} ${esc(q.no)}</strong>${q.needsReview ? ` <span class="badge review">${t("needsAttention")}</span>` : ""}${q.adjusted ? ` <span class="badge approved">${t("adjusted")}</span>` : ""}</div><label class="row score-label"><span>${t("teacherScore")}</span><input class="score-input" type="number" min="0" max="${q.max}" step="0.01" data-score="${index}" aria-label="${t("teacherScore")} ${esc(q.no)}" value="${q.score === null ? "" : q.score}" ${disabled ? "disabled" : ""}> / ${q.max}</label></div><div class="row between small muted"><span>${t("aiScore")}: ${q.aiScore === null ? "—" : q.aiScore}</span><span class="question-review-state ${q.reviewed ? "is-reviewed" : ""}">${t(q.reviewed ? "questionReviewed" : "questionPending")}</span></div>${q.reviewReason ? `<p class="status-error">${t(q.reviewReason)}</p>` : ""}${q.answer ? `<div class="evidence"><b>${t("answer")}</b> · ${esc(q.answer)}</div>` : ""}<p class="reason">${esc(q.comment)}</p><details ${reviewMode === "question" ? "open" : ""}><summary>${t("criteriaLabel")}</summary><p>${esc(s.result.rubric.questions.find((r) => r.no === q.no)?.criteria || "")}</p></details><label class="field"><span class="score-label">${t("teacherNote")}</span><textarea data-note="${index}" maxlength="3000" placeholder="${t("notePlaceholder")}" ${disabled ? "disabled" : ""}>${esc(q.note)}</textarea></label>${commentPickerHTML(index, disabled)}</article>`;
+  }
+  function questionCandidates() {
+    return C.reviewCandidates(
+      w.students,
+      w.rubric,
+      w.strictness,
+      activeQuestion,
+    );
+  }
+  function questionStudentMatches(s) {
+    const q = s.result.items.find((item) => item.no === activeQuestion);
+    return (
+      questionFilter === "all" ||
+      (questionFilter === "pending"
+        ? !q.reviewed
+        : q.needsReview || q.score === null)
+    );
+  }
+  function reviewStudents() {
+    return reviewMode === "question"
+      ? questionCandidates().filter(questionStudentMatches)
+      : w.students;
+  }
+  function modeBarHTML() {
+    const candidates = questionCandidates();
+    const reviewed = candidates.filter(
+      (s) => s.result.items.find((q) => q.no === activeQuestion)?.reviewed,
+    ).length;
+    return `<section class="review-modebar"><div class="review-mode-controls"><div class="segmented"><button data-action="review-mode" data-mode="student" class="${reviewMode === "student" ? "active" : ""}">${t("byStudent")}</button><button data-action="review-mode" data-mode="question" class="${reviewMode === "question" ? "active" : ""}">${t("byQuestion")}</button></div>${reviewMode === "question" ? `<label class="question-select-label"><span>${t("chooseQuestion")}</span><select id="review-question">${w.rubric.questions.map((q) => `<option value="${esc(q.no)}" ${q.no === activeQuestion ? "selected" : ""}>Q${esc(q.no)} · ${q.max} ${t("points")}</option>`).join("")}</select></label><label class="question-filter-label"><span>${t("status")}</span><select id="question-filter"><option value="all" ${questionFilter === "all" ? "selected" : ""}>${t("all")}</option><option value="pending" ${questionFilter === "pending" ? "selected" : ""}>${t("questionPending")}</option><option value="flagged" ${questionFilter === "flagged" ? "selected" : ""}>${t("flaggedOnly")}</option></select></label><span class="question-progress">${t("questionProgress")} <b>${reviewed} / ${candidates.length}</b></span>` : ""}</div>${
+      reviewMode === "question"
+        ? `<p>${t("questionQueueHelp")}</p><nav class="question-roster" aria-label="${t("questionQueue")}">${reviewStudents()
+            .map((s) => {
+              const q = s.result.items.find((q) => q.no === activeQuestion);
+              return `<button data-action="question-student" data-id="${esc(s.id)}" class="roster-student ${selected === s.id ? "active" : ""} ${q.reviewed ? "reviewed" : ""}" aria-pressed="${selected === s.id}"><span>${q.reviewed ? "✓" : "○"}</span>${esc(s.name)}</button>`;
+            })
+            .join("")}</nav>`
+        : ""
+    }</section>`;
+  }
+  function startQuestionReview() {
+    if (!w.rubric.questions.some((q) => q.no === activeQuestion))
+      activeQuestion = w.rubric.questions[0]?.no || "";
+    if (!questionCandidates().length) return toast(t("noQuestionResults"));
+    reviewMode = "question";
+    const target =
+      reviewStudents().find((s) => s.id === selected) ||
+      reviewStudents()[0] ||
+      questionCandidates()[0];
+    openReview(target.id);
+  }
+  function moveStudent(direction) {
+    const list = reviewStudents(),
+      current = list.findIndex((s) => s.id === selected);
+    if (list[current + direction]) openReview(list[current + direction].id);
+  }
+  function nextUnreviewedStudent() {
+    const all = questionCandidates(),
+      index = all.findIndex((s) => s.id === selected);
+    return [...all.slice(index + 1), ...all.slice(0, index + 1)].find(
+      (s) =>
+        questionStudentMatches(s) &&
+        !s.result.items.find((q) => q.no === activeQuestion).reviewed,
+    );
+  }
+  function reviewActionsHTML(s) {
+    const q = s.result?.items.find((q) => q.no === activeQuestion);
+    const locked = busy || isStale(s) || s.status !== "done";
+    const buttons =
+      reviewMode === "question" && q
+        ? `<div class="row wrap question-confirm-actions">${q.reviewed ? button("undo-question", t("undoQuestion"), "minus", "sm", locked ? "disabled" : "") : button("confirm-question", t("confirmQuestion"), "check", "sm", locked || q.score === null ? "disabled" : "")}${button("confirm-next", t("confirmNext"), "arrow", "primary", locked || q.score === null ? "disabled" : "")}</div>`
+        : s.result
+          ? button(
+              s.approved ? "unapprove" : "approve",
+              t(s.approved ? "unapprove" : "approvedAction"),
+              s.approved ? "minus" : "check",
+              "primary",
+              locked || !C.totals(s).complete ? "disabled" : "",
+            )
+          : "";
+    return `<div class="row">${s.result ? button("grade-one", t("regrade"), "spark", "sm", busy ? "disabled" : "") : ""}${button("delete-student", "", "trash", "icon-only danger", `aria-label="${t("delete")}" ${busy ? "disabled" : ""}`)}${s.result ? button("print", t("printReport"), "print", "sm") : ""}</div>${buttons}`;
+  }
   function openReview(id, keepPage = false) {
-    const s = getStudent(id);
+    if (displayedPageKey && $("#dialog").open)
+      pageMemory.set(displayedPageKey, pageIndex);
+    let s = getStudent(id);
     if (!s) return;
+    if (reviewMode === "question")
+      s =
+        reviewStudents().find((entry) => entry.id === id) ||
+        reviewStudents()[0] ||
+        s;
+    const available =
+      reviewMode !== "question" ||
+      reviewStudents().some((entry) => entry.id === s.id);
     const scrollTop =
-      keepPage && selected === id
+      keepPage && selected === s.id
         ? $("#dialog .review-scroll")?.scrollTop || 0
         : 0;
     const paperTop =
-      keepPage && selected === id
+      keepPage && selected === s.id
         ? $("#dialog .paper-scroll")?.scrollTop || 0
         : 0;
-    if (!keepPage || selected !== id) {
-      pageIndex = 0;
-      zoom = 1;
+    if (!keepPage || selected !== s.id) {
+      pageIndex =
+        pageMemory.get(
+          `${s.id}:${reviewMode === "question" ? activeQuestion : "student"}`,
+        ) ?? (reviewMode === "question" ? pageIndex : 0);
+      if (reviewMode === "student") zoom = 1;
     }
-    selected = id;
+    selected = s.id;
+    displayedPageKey = `${s.id}:${reviewMode === "question" ? activeQuestion : "student"}`;
     pageIndex = Math.min(pageIndex, Math.max(0, s.pages.length - 1));
-    const sum = C.totals(s);
-    const stale = isStale(s);
-    const idx = w.students.indexOf(s);
+    const stale = isStale(s),
+      list = reviewStudents(),
+      idx = list.findIndex((entry) => entry.id === s.id);
     showDialog(
-      `<header class="dialog-header"><div><div class="row"><h2>${esc(s.name)}</h2>${badge(s)}</div><small>${t("shortcutHint")}</small></div><div class="row">${button("prev-student", "", "left", "icon-only", `aria-label="${t("previousStudent")}" ${idx === 0 ? "disabled" : ""}`)}<span class="small muted mono">${idx + 1} / ${w.students.length}</span>${button("next-student", "", "right", "icon-only", `aria-label="${t("nextStudent")}" ${idx === w.students.length - 1 ? "disabled" : ""}`)}${button("close", "", "close", "icon-only ghost", `aria-label="${t("close")}"`)}</div></header><div class="review-body"><section class="paper-view" aria-label="${t("paperPreview")}"><div class="paper-toolbar"><div class="row"><span class="small muted">${t("paperPreview")}</span>${button("add-pages", t("addPages"), "plus", "sm", busy ? "disabled" : "")}</div><div class="row">${button("zoom-out", "", "minus", "icon-only", `aria-label="${t("zoomOut")}"`)}<small>${Math.round(zoom * 100)}%</small>${button("zoom-in", "", "plus", "icon-only", `aria-label="${t("zoomIn")}"`)}${button("rotate", "", "rotate", "icon-only", `aria-label="${t("rotate")}" ${busy || !s.pages.length ? "disabled" : ""}`)}${button("remove-page", "", "trash", "icon-only danger", `aria-label="${t("removePage")}" ${busy || !s.pages.length ? "disabled" : ""}`)}</div></div><div class="paper-scroll">${s.pages.length ? `<img src="${s.pages[pageIndex].dataUrl}" style="width:${zoom * 100}%" alt="${esc(s.name)} · ${t("page")} ${pageIndex + 1}">` : `<div class="empty"><div class="empty-icon">${icon("upload")}</div><h3>${t("noPages")}</h3><p>${t("uploadHint")}</p>${button("add-pages", t("addPages"), "plus", "primary", busy ? "disabled" : "")}</div>`}</div><div class="page-strip">${s.pages.map((p, i) => `<button class="page-thumb ${i === pageIndex ? "active" : ""}" data-action="page" data-index="${i}" aria-label="${t("page")} ${i + 1}" aria-pressed="${i === pageIndex}"><img src="${p.dataUrl}" alt=""><span>${i + 1}</span></button>`).join("")}</div></section><section class="review-content"><div class="review-scroll"><div class="review-summary"><div><h3>${t("resultTitle")}</h3><p>${t("resultIntro")}</p></div><div class="big-score">${s.result ? (sum.complete ? sum.score : "—") : "—"}<small>${s.result ? " / " + sum.max : ""}</small></div></div><div class="field" style="margin-bottom:18px"><label for="student-name">${t("student")}</label><input id="student-name" type="text" maxlength="100" value="${esc(s.name)}" ${busy ? "disabled" : ""}></div>
-      ${s.result?.demo ? `<div class="notice">${t("noRealAI")}</div>` : ""}${stale ? `<div class="notice error">${t("rubricChanged")}</div>` : ""}${s.error ? `<div class="notice error">${esc(s.error)}</div>` : ""}
+      `<header class="dialog-header"><div><div class="row"><h2>${available ? esc(s.name) : t("byQuestion")}</h2>${available ? badge(s) : ""}</div><small>${t("shortcutHint")}</small></div><div class="row">${button("prev-student", "", "left", "icon-only", `aria-label="${t("previousStudent")}" ${idx <= 0 ? "disabled" : ""}`)}<span class="small muted mono">${available ? idx + 1 : 0} / ${list.length}</span>${button("next-student", "", "right", "icon-only", `aria-label="${t("nextStudent")}" ${idx < 0 || idx >= list.length - 1 ? "disabled" : ""}`)}${button("close", "", "close", "icon-only ghost", `aria-label="${t("close")}"`)}</div></header>${modeBarHTML()}${
+        !available
+          ? `<div class="empty question-empty"><div class="empty-icon">${icon("circleCheck")}</div><h3>${t("noQuestionMatches")}</h3><p>${t("questionModeIntro")}</p></div>`
+          : `<div class="review-body"><section class="paper-view" aria-label="${t("paperPreview")}"><div class="paper-toolbar"><div class="row"><span class="small muted">${t("paperPreview")}</span>${button("add-pages", t("addPages"), "plus", "sm", busy ? "disabled" : "")}</div><div class="row">${button("zoom-out", "", "minus", "icon-only", `aria-label="${t("zoomOut")}"`)}<small>${Math.round(zoom * 100)}%</small>${button("zoom-in", "", "plus", "icon-only", `aria-label="${t("zoomIn")}"`)}${button("rotate", "", "rotate", "icon-only", `aria-label="${t("rotate")}" ${busy || !s.pages.length ? "disabled" : ""}`)}${button("remove-page", "", "trash", "icon-only danger", `aria-label="${t("removePage")}" ${busy || !s.pages.length ? "disabled" : ""}`)}</div></div><div class="paper-scroll">${s.pages.length ? `<img src="${s.pages[pageIndex].dataUrl}" style="width:${zoom * 100}%" alt="${esc(s.name)} · ${t("page")} ${pageIndex + 1}">` : `<div class="empty"><div class="empty-icon">${icon("upload")}</div><h3>${t("noPages")}</h3><p>${t("uploadHint")}</p>${button("add-pages", t("addPages"), "plus", "primary", busy ? "disabled" : "")}</div>`}</div><div class="page-strip">${s.pages.map((p, i) => `<button class="page-thumb ${i === pageIndex ? "active" : ""}" data-action="page" data-index="${i}" aria-label="${t("page")} ${i + 1}" aria-pressed="${i === pageIndex}"><img src="${p.dataUrl}" alt=""><span>${i + 1}</span></button>`).join("")}</div></section><section class="review-content"><div class="review-scroll"><div class="review-summary"><div><h3>${reviewMode === "question" ? `${t("questionNo")} ${esc(activeQuestion)}` : t("resultTitle")}</h3><p>${t(reviewMode === "question" ? "questionModeIntro" : "resultIntro")}</p></div><div class="big-score">${reviewScoreHTML(s)}</div></div><div class="field" style="margin-bottom:18px"><label for="student-name">${t("student")}</label><input id="student-name" type="text" maxlength="100" value="${esc(s.name)}" ${busy ? "disabled" : ""}></div>${s.result?.demo ? `<div class="notice">${t("noRealAI")}</div>` : ""}${stale ? `<div class="notice error">${t("rubricChanged")}</div>` : ""}${s.error ? `<div class="notice error">${esc(s.error)}</div>` : ""}
       ${
         s.result
-          ? `${s.result.warnings.map((m) => `<div class="notice">${esc(m)}</div>`).join("")}${s.result.items.map((q, i) => `<article class="question-result ${q.needsReview ? "flagged" : ""}"><div class="question-title"><div><strong>${t("questionNo")} ${esc(q.no)}</strong>${q.needsReview ? ` <span class="badge review">${t("needsAttention")}</span>` : ""}${q.adjusted ? ` <span class="badge approved">${t("adjusted")}</span>` : ""}</div><label class="row score-label"><span>${t("teacherScore")}</span><input class="score-input" type="number" min="0" max="${q.max}" step="0.01" data-score="${i}" aria-label="${t("teacherScore")} ${esc(q.no)}" value="${q.score === null ? "" : q.score}" ${busy || stale ? "disabled" : ""}> / ${q.max}</label></div><div class="small muted">${t("aiScore")}: ${q.aiScore === null ? "—" : q.aiScore}</div>${q.reviewReason ? `<p class="status-error">${t(q.reviewReason)}</p>` : ""}${q.answer ? `<div class="evidence"><b>${t("answer")}</b> · ${esc(q.answer)}</div>` : ""}<p class="reason">${esc(q.comment)}</p><details><summary>${t("criteriaLabel")}</summary><p>${esc(s.result.rubric.questions.find((r) => r.no === q.no)?.criteria || "")}</p></details><label class="field"><span class="score-label">${t("teacherNote")}</span><textarea data-note="${i}" maxlength="3000" placeholder="${t("notePlaceholder")}" ${busy || stale ? "disabled" : ""}>${esc(q.note)}</textarea></label></article>`).join("")}<div class="feedback-box"><h3>${t("feedback")}</h3><p>${esc(s.result.overall)}</p></div><details class="audit"><summary>${t("audit")} (${s.audit.length})</summary>${s.audit
+          ? s.result.warnings
+              .map((message) => `<div class="notice">${esc(message)}</div>`)
+              .join("") +
+            s.result.items
+              .map((q, i) =>
+                reviewMode !== "question" || q.no === activeQuestion
+                  ? questionCardHTML(s, q, i)
+                  : "",
+              )
+              .join("") +
+            (reviewMode !== "question"
+              ? `<div class="feedback-box"><h3>${t("feedback")}</h3><p>${esc(s.result.overall)}</p></div>`
+              : "") +
+            `<details class="audit"><summary>${t("audit")} (${s.audit.length})</summary>${s.audit
               .slice()
               .reverse()
               .map(
@@ -524,28 +727,85 @@
               .join("")}</details>`
           : `<div class="empty"><div class="empty-icon">${icon("spark")}</div><p>${t("noResult")}</p>${button("grade-one", t("grade"), "spark", "primary", busy || !s.pages.length ? "disabled" : "")}</div>`
       }
-      <p class="review-footer-note">${t("uploadPrivacy")}</p></div><footer class="review-actions"><div class="row">${s.result ? button("grade-one", t("regrade"), "spark", "sm", busy ? "disabled" : "") : ""}${button("delete-student", "", "trash", "icon-only danger", `aria-label="${t("delete")}" ${busy ? "disabled" : ""}`)}${s.result ? button("print", t("printReport"), "print", "sm") : ""}</div>${s.result ? button(s.approved ? "unapprove" : "approve", t(s.approved ? "unapprove" : "approvedAction"), s.approved ? "minus" : "check", "primary", busy || stale || s.status !== "done" || !sum.complete ? "disabled" : "") : ""}</footer></section></div>`,
+      <p class="review-footer-note">${t("uploadPrivacy")}</p></div><footer class="review-actions">${reviewActionsHTML(s)}</footer></section></div>`
+      }`,
       "review-dialog",
     );
-    $("#dialog .review-scroll").scrollTop = scrollTop;
-    $("#dialog .paper-scroll").scrollTop = paperTop;
+    if (available) {
+      $("#dialog .review-scroll").scrollTop = scrollTop;
+      $("#dialog .paper-scroll").scrollTop = paperTop;
+    }
+    $("#dialog .roster-student.active")?.scrollIntoView({
+      block: "nearest",
+      inline: "nearest",
+    });
+  }
+  function reviewScoreHTML(s) {
+    const q =
+      reviewMode === "question"
+        ? s.result?.items.find((q) => q.no === activeQuestion)
+        : null;
+    const sum = C.totals(s);
+    const score = q ? q.score : sum.complete ? sum.score : null;
+    return `<span class="score-caption">${t(q ? "questionScore" : "paperScore")}</span>${score ?? "—"}<small>${s.result ? " / " + (q ? q.max : sum.max) : ""}</small>`;
   }
   function updateReviewAfterEdit(s) {
     const sum = C.totals(s);
-    $("#dialog .big-score").innerHTML =
-      `${sum.complete ? sum.score : "—"}<small> / ${sum.max}</small>`;
+    const bigScore = $("#dialog .big-score");
+    if (!bigScore) return;
+    bigScore.innerHTML = reviewScoreHTML(s);
     const statusBadge = $("#dialog .dialog-header .badge");
     if (statusBadge) statusBadge.outerHTML = badge(s);
-    const approval = $(
-      '#dialog [data-action="approve"], #dialog [data-action="unapprove"]',
-    );
-    if (approval) {
-      approval.dataset.action = "approve";
-      approval.innerHTML = icon("check") + esc(t("approvedAction"));
-      approval.disabled =
-        busy || isStale(s) || s.status !== "done" || !sum.complete;
+    for (const card of document.querySelectorAll("#dialog .question-result")) {
+      const q = s.result.items.find(
+        (item) => item.no === card.dataset.questionNo,
+      );
+      const status = card.querySelector(".question-review-state");
+      status.textContent = t(
+        q.reviewed ? "questionReviewed" : "questionPending",
+      );
+      status.classList.toggle("is-reviewed", q.reviewed);
+    }
+    const locked = busy || isStale(s) || s.status !== "done";
+    if (reviewMode === "question") {
+      const q = s.result.items.find((q) => q.no === activeQuestion);
+      const first = $(
+        "#dialog [data-action='confirm-question'], #dialog [data-action='undo-question']",
+      );
+      if (first) {
+        first.dataset.action = q.reviewed
+          ? "undo-question"
+          : "confirm-question";
+        first.innerHTML =
+          icon(q.reviewed ? "minus" : "check") +
+          t(q.reviewed ? "undoQuestion" : "confirmQuestion");
+        first.disabled = locked || q.score === null;
+      }
+      const next = $("#dialog [data-action='confirm-next']");
+      if (next) next.disabled = locked || q.score === null;
+      const candidates = questionCandidates();
+      const progress = $("#dialog .question-progress");
+      if (progress)
+        progress.innerHTML = `${t("questionProgress")} <b>${candidates.filter((s) => s.result.items.find((q) => q.no === activeQuestion)?.reviewed).length} / ${candidates.length}</b>`;
+      for (const row of document.querySelectorAll("#dialog .roster-student")) {
+        const done = getStudent(row.dataset.id)?.result?.items.find(
+          (q) => q.no === activeQuestion,
+        )?.reviewed;
+        row.classList.toggle("reviewed", !!done);
+        row.querySelector("span").textContent = done ? "✓" : "○";
+      }
+    } else {
+      const approval = $(
+        "#dialog [data-action='approve'], #dialog [data-action='unapprove']",
+      );
+      if (approval) {
+        approval.dataset.action = "approve";
+        approval.innerHTML = icon("check") + t("approvedAction");
+        approval.disabled = locked || !sum.complete;
+      }
     }
   }
+
   function sampleRubric() {
     const en = lang === "en";
     return {
@@ -767,7 +1027,13 @@
         };
         s.status = "done";
         s.approved = i < 2;
-        if (s.approved) audit(s, "approved");
+        if (s.approved) {
+          s.result.items.forEach((q) => {
+            q.reviewed = true;
+            q.reviewedAt = s.result.createdAt;
+          });
+          audit(s, "approved");
+        }
       }
       return s;
     });
@@ -1148,6 +1414,7 @@
           exportedAt: new Date().toISOString(),
           workspace: w,
           templates,
+          commentBank,
         },
         null,
         2,
@@ -1164,17 +1431,25 @@
       const raw = JSON.parse(await file.text());
       const restored = C.validateBackup(raw);
       const restoredTemplates = Array.isArray(raw.templates)
-        ? raw.templates
-            .slice(0, 100)
-            .map((r) => ({
-              id: uid(),
-              name: String(r.name || "").slice(0, 150),
-              rubric: C.validateRubric(r.rubric),
-            }))
+        ? raw.templates.slice(0, 100).map((r) => ({
+            id: uid(),
+            name: String(r.name || "").slice(0, 150),
+            rubric: C.validateRubric(r.rubric),
+          }))
         : [];
+      const restoredComments =
+        raw.commentBank === undefined
+          ? commentBank
+          : C.validateCommentBank(raw.commentBank);
       if (w.students.length && !confirm(t("restoreConfirm"))) return;
       w = restored;
       templates = restoredTemplates;
+      commentBank = restoredComments;
+      editingComment = null;
+      commentSearch = "";
+      commentCategory = "all";
+      favoritesOnly = false;
+      pageMemory.clear();
       view = "workspace";
       filter = "all";
       search = "";
@@ -1205,7 +1480,13 @@
   }
   function editRubric() {
     w.students.forEach((s) => {
-      if (s.result) s.approved = false;
+      if (s.result) {
+        s.approved = false;
+        s.result.items.forEach((q) => {
+          q.reviewed = false;
+          q.reviewedAt = "";
+        });
+      }
     });
     saveState = "saving";
     updateSave();
@@ -1237,6 +1518,10 @@
     "test-connection",
     "clear-key",
     "restore",
+    "apply-comment",
+    "confirm-question",
+    "confirm-next",
+    "undo-question",
   ]);
   async function handleAction(el) {
     const action = el.dataset.action;
@@ -1244,6 +1529,113 @@
     if (busy && guarded.has(action)) return toast(t("busy"));
     try {
       switch (action) {
+        case "review-by-question":
+          startQuestionReview();
+          break;
+        case "review-mode":
+          if (el.dataset.mode === "question") startQuestionReview();
+          else {
+            reviewMode = "student";
+            openReview(selected);
+          }
+          break;
+        case "question-student":
+          openReview(el.dataset.id);
+          break;
+        case "confirm-question":
+        case "confirm-next":
+        case "undo-question": {
+          const s = getStudent();
+          const approved = C.setQuestionReviewed(
+            s,
+            activeQuestion,
+            w.rubric,
+            w.strictness,
+            action !== "undo-question",
+          );
+          audit(
+            s,
+            action === "undo-question"
+              ? "questionUnreviewed"
+              : "questionConfirmed",
+            { no: activeQuestion },
+          );
+          if (approved) audit(s, "approved");
+          const next =
+            action === "confirm-next" ? nextUnreviewedStudent() : null;
+          save();
+          render();
+          openReview(next?.id || s.id, true);
+          toast(
+            t(
+              approved
+                ? "allQuestionApproved"
+                : action === "undo-question"
+                  ? "questionUnreviewed"
+                  : action === "confirm-next" && !next
+                    ? "questionFinished"
+                    : "questionConfirmed",
+            ),
+          );
+          break;
+        }
+        case "new-comment":
+          editingComment = null;
+          render();
+          $("#comment-zh")?.focus();
+          break;
+        case "edit-comment":
+          editingComment = el.dataset.id;
+          render();
+          $("#comment-zh")?.focus();
+          break;
+        case "favorite-comment": {
+          const c = commentBank.find((c) => c.id === el.dataset.id);
+          if (!c) break;
+          c.favorite = !c.favorite;
+          save();
+          $("#comment-cards").innerHTML = commentCardsHTML();
+          if (editingComment === c.id)
+            $("#comment-favorite").checked = c.favorite;
+          break;
+        }
+        case "delete-comment":
+          if (confirm(t("commentDeleteConfirm"))) {
+            commentBank = commentBank.filter((c) => c.id !== el.dataset.id);
+            if (editingComment === el.dataset.id) editingComment = null;
+            save();
+            render();
+            toast(t("commentDeleted"));
+          }
+          break;
+        case "manage-comments":
+          closeDialog();
+          view = "comments";
+          render();
+          break;
+        case "apply-comment": {
+          const s = getStudent(),
+            index = Number(el.dataset.index),
+            q = s?.result?.items[index];
+          const c = commentBank.find((c) => c.id === el.dataset.id);
+          if (!q || !c || isStale(s) || s.status !== "done")
+            throw new Error("reviewUnavailable");
+          const next = C.appendComment(q.note, C.commentText(c, lang));
+          if (next === q.note.trim()) {
+            toast(t("commentExists"));
+            break;
+          }
+          q.note = next;
+          C.invalidateQuestion(s, q.no);
+          audit(s, "applyComment", { no: q.no });
+          const note = $(`#dialog textarea[data-note="${index}"]`);
+          if (note) note.value = next;
+          save();
+          render();
+          updateReviewAfterEdit(s);
+          toast(t("commentApplied"));
+          break;
+        }
         case "view":
           view = el.dataset.view;
           render();
@@ -1281,6 +1673,7 @@
           $("#papers-input").click();
           break;
         case "review":
+          reviewMode = "student";
           openReview(el.dataset.id);
           break;
         case "close":
@@ -1288,10 +1681,7 @@
           break;
         case "prev-student":
         case "next-student": {
-          const idx =
-            w.students.indexOf(getStudent()) +
-            (action === "prev-student" ? -1 : 1);
-          if (w.students[idx]) openReview(w.students[idx].id);
+          moveStudent(action === "prev-student" ? -1 : 1);
           break;
         }
         case "page":
@@ -1373,6 +1763,10 @@
           const s = getStudent();
           if (!s?.result || isStale(s) || !C.totals(s).complete) break;
           s.approved = action === "approve";
+          s.result.items.forEach((q) => {
+            q.reviewed = s.approved;
+            q.reviewedAt = s.approved ? new Date().toISOString() : "";
+          });
           audit(s, s.approved ? "approved" : "unapprove");
           save();
           render();
@@ -1494,6 +1888,29 @@
     }
   });
   document.addEventListener("submit", async (e) => {
+    if (e.target.id === "comment-form") {
+      e.preventDefault();
+      try {
+        const entry = {
+          id: editingComment || uid(),
+          category: $("#comment-category").value,
+          zh: $("#comment-zh").value,
+          en: $("#comment-en").value,
+          favorite: $("#comment-favorite").checked,
+        };
+        const next = editingComment
+          ? commentBank.map((c) => (c.id === editingComment ? entry : c))
+          : [...commentBank, entry];
+        commentBank = C.validateCommentBank(next);
+        editingComment = entry.id;
+        await save();
+        render();
+        if (saveState === "localSaved") toast(t("commentSaved"));
+      } catch (error) {
+        toast(errText(error));
+      }
+      return;
+    }
     if (e.target.id === "new-batch-form") {
       e.preventDefault();
       if (busy) return;
@@ -1530,6 +1947,15 @@
   });
   document.addEventListener("input", (e) => {
     const el = e.target;
+    if (el.id === "comment-search") {
+      commentSearch = el.value;
+      $("#comment-cards").innerHTML = commentCardsHTML();
+      return;
+    }
+    if (el.matches(".picker-search")) {
+      updatePicker(el.closest(".comment-picker"));
+      return;
+    }
     if (el.id === "search") {
       search = el.value;
       $("#student-table").innerHTML = tableHTML();
@@ -1557,6 +1983,31 @@
   });
   document.addEventListener("change", async (e) => {
     const el = e.target;
+    if (el.id === "comment-category-filter") {
+      commentCategory = el.value;
+      $("#comment-cards").innerHTML = commentCardsHTML();
+      return;
+    }
+    if (el.id === "comments-favorites") {
+      favoritesOnly = el.checked;
+      $("#comment-cards").innerHTML = commentCardsHTML();
+      return;
+    }
+    if (el.matches(".picker-category")) {
+      updatePicker(el.closest(".comment-picker"));
+      return;
+    }
+    if (el.id === "review-question") {
+      if (displayedPageKey) pageMemory.set(displayedPageKey, pageIndex);
+      activeQuestion = el.value;
+      openReview(selected);
+      return;
+    }
+    if (el.id === "question-filter") {
+      questionFilter = el.value;
+      openReview(selected);
+      return;
+    }
     if (busy) return;
     if (el.id === "strictness") {
       w.strictness = el.value;
@@ -1598,7 +2049,7 @@
       audit(s, "adjusted", { no: q.no, from: q.score, to: value });
       q.score = value === null ? null : C.round(value);
       q.adjusted = q.score !== q.aiScore;
-      s.approved = false;
+      C.invalidateQuestion(s, q.no);
       save();
       render();
       updateReviewAfterEdit(s);
@@ -1617,7 +2068,7 @@
       const s = getStudent();
       if (!s?.result || isStale(s)) return;
       s.result.items[Number(el.dataset.note)].note = el.value;
-      s.approved = false;
+      C.invalidateQuestion(s, s.result.items[Number(el.dataset.note)].no);
       audit(s, "teacherNote", {
         no: s.result.items[Number(el.dataset.note)].no,
       });
@@ -1688,9 +2139,7 @@
       ["ArrowLeft", "ArrowRight"].includes(e.key)
     ) {
       e.preventDefault();
-      const i =
-        w.students.indexOf(getStudent()) + (e.key === "ArrowLeft" ? -1 : 1);
-      if (w.students[i]) openReview(w.students[i].id);
+      moveStudent(e.key === "ArrowLeft" ? -1 : 1);
     }
   });
   $("#dialog").addEventListener("close", () => {
