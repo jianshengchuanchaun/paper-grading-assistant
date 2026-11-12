@@ -1,6 +1,7 @@
 (async function () {
   "use strict";
   const C = window.GradeCore;
+  const L = window.GradeLibrary;
   const $ = (s) => document.querySelector(s);
   const esc = (v) =>
     String(v ?? "").replace(
@@ -80,6 +81,13 @@
     custom: "",
   };
   let w = emptyWorkspace();
+  let catalog = L.migrate(w, uid(), uid()),
+    storageRevision = 0,
+    storageReady = true;
+  let librarySearch = "",
+    libraryClass = "all",
+    libraryState = "active",
+    librarySort = "updated";
   let settings = {
     mode: "direct",
     provider: "zhipu",
@@ -135,52 +143,52 @@
     s.audit = s.audit.slice(-200);
   }
   function localSnapshot() {
-    return { workspace: w, templates, settings, commentBank };
+    return { catalog, templates, settings, commentBank };
   }
-  async function openDB() {
-    return new Promise((resolve, reject) => {
-      const req = indexedDB.open("gradeflow-v2", 1);
-      req.onupgradeneeded = () => req.result.createObjectStore("workspace");
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
+  function syncActive() {
+    const record = catalog.batches.find((b) => b.id === catalog.activeBatchId);
+    Object.assign(record, L.summarize(w), {
+      updatedAt: new Date().toISOString(),
     });
-  }
-  function dbRead() {
-    return new Promise((resolve, reject) => {
-      const r = db
-        .transaction("workspace")
-        .objectStore("workspace")
-        .get("current");
-      r.onsuccess = () => resolve(r.result);
-      r.onerror = () => reject(r.error);
-    });
+    w.className =
+      catalog.classes.find((c) => c.id === record.classId)?.name || "";
   }
   function save() {
+    if (!storageReady || !db) {
+      toast(t(saveState));
+      return Promise.resolve(false);
+    }
     clearTimeout(draftSaveTimer);
     saveState = "saving";
     updateSave();
+    syncActive();
     const snapshot = structuredClone(localSnapshot());
+    const record = { id: catalog.activeBatchId, workspace: structuredClone(w) };
     saveChain = saveChain
       .catch(() => {})
-      .then(
-        () =>
-          new Promise((resolve, reject) => {
-            if (!db) return reject(new Error("saveFailed"));
-            const tx = db.transaction("workspace", "readwrite");
-            tx.objectStore("workspace").put(snapshot, "current");
-            tx.oncomplete = resolve;
-            tx.onerror = () => reject(tx.error);
-            tx.onabort = () => reject(tx.error);
-          }),
-      )
+      .then(async () => {
+        if (!db || !storageReady)
+          throw new Error(
+            saveState === "libraryConflict" ? "libraryConflict" : "saveFailed",
+          );
+        storageRevision = await L.write(db, storageRevision, snapshot, [
+          record,
+        ]);
+      })
       .then(() => {
         saveState = "localSaved";
         updateSave();
+        return true;
       })
-      .catch(() => {
-        saveState = "saveFailed";
+      .catch((error) => {
+        saveState =
+          error.message === "libraryConflict"
+            ? "libraryConflict"
+            : "saveFailed";
+        if (error.message === "libraryConflict") storageReady = false;
         updateSave();
         toast(t("saveFailed"));
+        return false;
       });
     return saveChain;
   }
@@ -192,14 +200,35 @@
     }
   }
   try {
-    db = await openDB();
-    const saved = await dbRead();
-    if (saved?.workspace) {
+    db = await L.open();
+    db.onversionchange = () => {
+      db.close();
+      storageReady = false;
+      saveState = "storageBlocked";
+      updateSave();
+      toast(t("storageBlocked"));
+    };
+    const saved = await L.read(db, "workspace", "current");
+    storageRevision = saved?.revision || 0;
+    if (saved?.version === 3) {
+      catalog = L.validateCatalog(saved.catalog);
+      const current = catalog.batches.find(
+        (b) => b.id === catalog.activeBatchId,
+      );
+      w = L.normalizeWorkspace(
+        await L.read(db, "batches", current.id),
+        current,
+        catalog.classes,
+      );
+    } else if (saved?.workspace) {
       w = C.validateBackup({
         format: "gradeflow",
         version: 2,
         workspace: saved.workspace,
       });
+      catalog = L.migrate(w, uid(), uid());
+    }
+    if (saved) {
       templates = Array.isArray(saved.templates)
         ? saved.templates
             .filter((r) => {
@@ -225,8 +254,16 @@
         model: typeof cfg.model === "string" ? cfg.model : "",
       };
     }
-  } catch {
-    saveState = "saveFailed";
+    if (saved?.version !== 3)
+      storageRevision = await L.write(db, storageRevision, localSnapshot(), [
+        { id: catalog.activeBatchId, workspace: w },
+      ]);
+  } catch (error) {
+    storageReady = false;
+    saveState =
+      error.message === "storageBlocked"
+        ? "storageBlocked"
+        : "storageLoadFailed";
   }
   function rubricValid() {
     try {
@@ -279,16 +316,289 @@
       audit: [],
     };
   }
+  const currentBatch = () =>
+    catalog.batches.find((b) => b.id === catalog.activeBatchId);
+  const classLabel = (id) =>
+    catalog.classes.find((c) => c.id === id)?.name || t("unassignedClass");
+  function classOptions(selectedId = "") {
+    return (
+      `<option value="">${t("unassignedClass")}</option>` +
+      catalog.classes
+        .map(
+          (c) =>
+            `<option value="${esc(c.id)}" ${c.id === selectedId ? "selected" : ""}>${esc(c.name)}</option>`,
+        )
+        .join("")
+    );
+  }
+  function resetBatchView() {
+    closeDialog();
+    filter = "all";
+    search = "";
+    selected = null;
+    uploadTarget = null;
+    reviewMode = "student";
+    activeQuestion = "";
+    questionFilter = "all";
+    pageIndex = 0;
+    zoom = 1;
+    displayedPageKey = null;
+    pageMemory.clear();
+  }
+  async function commitCatalog(
+    nextCatalog,
+    records = [],
+    remove = [],
+    globals = {},
+    clear = false,
+  ) {
+    const valid = L.validateCatalog(nextCatalog);
+    const metadata = { ...localSnapshot(), ...globals, catalog: valid };
+    storageRevision = await L.write(
+      db,
+      storageRevision,
+      metadata,
+      records,
+      remove,
+      clear,
+    );
+    catalog = valid;
+    if (globals.templates) templates = globals.templates;
+    if (globals.commentBank) commentBank = globals.commentBank;
+    saveState = "localSaved";
+  }
+  async function libraryTask(operation) {
+    if (busy) return toast(t("busy"));
+    busy = true;
+    render();
+    try {
+      if (!(await save())) throw new Error(saveState);
+      await operation();
+    } catch (error) {
+      if (error.message === "libraryConflict") {
+        storageReady = false;
+        saveState = "libraryConflict";
+      }
+      toast(
+        t(error.message) === error.message ? t("saveFailed") : t(error.message),
+      );
+    } finally {
+      busy = false;
+      render();
+    }
+  }
+  function classForName(nextCatalog, name) {
+    const value = name.trim();
+    if (!value) return null;
+    let c = nextCatalog.classes.find(
+      (c) => L.nameKey(c.name) === L.nameKey(value),
+    );
+    if (!c) {
+      if (nextCatalog.classes.length >= 200) throw new Error("libraryLimit");
+      c = { id: uid(), name: value, note: "" };
+      nextCatalog.classes.push(c);
+    }
+    return c.id;
+  }
+  async function createSavedBatch(workspace, examDate = "", globals = {}) {
+    const next = structuredClone(catalog);
+    if (next.batches.length >= 200) throw new Error("libraryLimit");
+    const classId = classForName(next, workspace.className);
+    const record = L.makeBatch(workspace, uid(), classId, examDate);
+    const remove = [];
+    if (
+      !w.title &&
+      !w.className &&
+      !w.students.length &&
+      !w.rubric.questions.length &&
+      !w.rubric.instructions
+    ) {
+      remove.push(catalog.activeBatchId);
+      next.batches = next.batches.filter((b) => b.id !== catalog.activeBatchId);
+    }
+    next.batches.push(record);
+    next.activeBatchId = record.id;
+    await commitCatalog(next, [{ id: record.id, workspace }], remove, globals);
+    w = workspace;
+    w.className = classLabel(record.classId);
+    if (!record.classId) w.className = "";
+    resetBatchView();
+    view = "workspace";
+  }
+  async function openSavedBatch(id) {
+    if (id === catalog.activeBatchId) {
+      view = "workspace";
+      render();
+      return;
+    }
+    await libraryTask(async () => {
+      const next = structuredClone(catalog),
+        record = next.batches.find((b) => b.id === id);
+      if (!record) throw new Error("invalidLibrary");
+      const workspace = L.normalizeWorkspace(
+        await L.read(db, "batches", id),
+        record,
+        next.classes,
+      );
+      next.activeBatchId = id;
+      await commitCatalog(next);
+      w = workspace;
+      resetBatchView();
+      view = "workspace";
+      toast(t("batchOpened"));
+    });
+  }
+  function batchContextHTML() {
+    const record = currentBatch();
+    return `<section class="batch-context"><div><span class="eyebrow">${t("currentBatch")}</span><strong>${esc(w.title || t("defaultTitle"))}</strong><span class="small muted">${esc(classLabel(record.classId))}${record.examDate ? " · " + esc(record.examDate) : ""}${record.archived ? " · " + t("archivedBatch") : ""}</span></div><div class="row wrap"><label class="sr-only" for="batch-switch">${t("switchBatch")}</label><select id="batch-switch" ${busy ? "disabled" : ""}>${catalog.batches
+      .filter((b) => !b.archived || b.id === catalog.activeBatchId)
+      .map(
+        (b) =>
+          `<option value="${esc(b.id)}" ${b.id === catalog.activeBatchId ? "selected" : ""}>${esc(classLabel(b.classId))} · ${esc(b.title || t("defaultTitle"))}</option>`,
+      )
+      .join(
+        "",
+      )}</select>${button("view", t("manageBatches"), "clock", "sm", 'data-view="library"')}</div></section>`;
+  }
+  function filteredBatches() {
+    const needle = librarySearch.trim().toLocaleLowerCase();
+    return catalog.batches
+      .filter(
+        (b) =>
+          (libraryClass === "all" ||
+            (libraryClass === "unassigned"
+              ? !b.classId
+              : b.classId === libraryClass)) &&
+          (libraryState === "all" ||
+            (libraryState === "archived" ? b.archived : !b.archived)) &&
+          (!needle ||
+            `${b.title} ${classLabel(b.classId)} ${b.examDate}`
+              .toLocaleLowerCase()
+              .includes(needle)),
+      )
+      .sort((a, b) =>
+        librarySort === "exam"
+          ? b.examDate.localeCompare(a.examDate) ||
+            b.updatedAt.localeCompare(a.updatedAt)
+          : b.updatedAt.localeCompare(a.updatedAt),
+      );
+  }
+  function batchCardsHTML() {
+    const records = filteredBatches();
+    return records.length
+      ? records
+          .map(
+            (b) =>
+              `<article class="batch-card ${b.id === catalog.activeBatchId ? "is-current" : ""}" data-batch-id="${esc(b.id)}"><div class="row between"><span class="badge">${esc(classLabel(b.classId))}</span><div class="row">${b.demo ? `<span class="badge review">${t("demoTag")}</span>` : ""}${b.archived ? `<span class="badge">${t("archivedBatch")}</span>` : ""}${b.id === catalog.activeBatchId ? `<span class="badge approved">${t("currentBatch")}</span>` : ""}</div></div><h2>${esc(b.title || t("defaultTitle"))}</h2><p class="small muted">${b.examDate ? `${t("examDate")} · ${esc(b.examDate)}` : t("noExamDate")}</p><div class="batch-card-stats"><span><strong>${b.total}</strong> ${t("papers")}</span><span><strong>${b.approved}</strong> ${t("confirmed")}</span></div><div class="progress-line"><i style="width:${b.total ? Math.round((b.approved / b.total) * 100) : 0}%"></i></div><p class="batch-updated">${t("lastEdited")} ${esc(new Date(b.updatedAt).toLocaleString(lang === "en" ? "en-US" : "zh-CN", { dateStyle: "medium", timeStyle: "short" }))}</p><div class="row wrap batch-card-actions">${button("open-batch", t(b.id === catalog.activeBatchId ? "continueBatch" : "openBatch"), "arrow", b.id === catalog.activeBatchId ? "primary sm" : "sm", `data-id="${esc(b.id)}" ${busy ? "disabled" : ""}`)}${button("edit-batch", t("editBatch"), "edit", "sm", `data-id="${esc(b.id)}" ${busy ? "disabled" : ""}`)}${button("archive-batch", t(b.archived ? "unarchiveBatch" : "archiveBatch"), "clock", "sm ghost", `data-id="${esc(b.id)}" ${busy ? "disabled" : ""}`)}${button("backup-batch", t("backupOne"), "download", "sm ghost", `data-id="${esc(b.id)}" ${busy ? "disabled" : ""}`)}${button("delete-batch", "", "trash", "icon-only danger", `data-id="${esc(b.id)}" aria-label="${t("deleteBatch")}" title="${t(b.id === catalog.activeBatchId ? "switchBeforeDelete" : "deleteBatch")}" ${busy || b.id === catalog.activeBatchId ? "disabled" : ""}`)}</div></article>`,
+          )
+          .join("")
+      : `<div class="empty library-empty"><div class="empty-icon">${icon("clock")}</div><h3>${t("noBatches")}</h3><p>${t("noBatchesHelp")}</p>${button("new-batch", t("newBatch"), "plus", "primary", busy ? "disabled" : "")}</div>`;
+  }
+  function libraryHTML() {
+    return (
+      heading(
+        t("libraryTitle"),
+        t("libraryIntro"),
+        button(
+          "backup-all",
+          t("backupAll"),
+          "download",
+          "",
+          busy ? "disabled" : "",
+        ) +
+          button(
+            "new-batch",
+            t("newBatch"),
+            "plus",
+            "primary",
+            busy ? "disabled" : "",
+          ),
+      ) +
+      `<div class="library-overview"><span><b>${catalog.classes.length}</b> ${t("classCount")}</span><span><b>${catalog.batches.length}</b> ${t("batchCount")}</span><span><b>${catalog.batches.filter((b) => b.archived).length}</b> ${t("archivedBatch")}</span></div><div class="library-layout"><aside class="class-panel panel"><div class="row between"><h2>${t("myClasses")}</h2>${button("new-class", "", "plus", "icon-only", `aria-label="${t("newClass")}" ${busy ? "disabled" : ""}`)}</div><button class="class-filter ${libraryClass === "all" ? "active" : ""}" data-action="filter-class" data-id="all"><span>${t("allClasses")}</span><b>${catalog.batches.length}</b></button><button class="class-filter ${libraryClass === "unassigned" ? "active" : ""}" data-action="filter-class" data-id="unassigned"><span>${t("unassignedClass")}</span><b>${catalog.batches.filter((b) => !b.classId).length}</b></button>${catalog.classes.map((c) => `<div class="class-row"><button class="class-filter ${libraryClass === c.id ? "active" : ""}" data-action="filter-class" data-id="${esc(c.id)}"><span>${esc(c.name)}${c.note ? `<small>${esc(c.note)}</small>` : ""}</span><b>${catalog.batches.filter((b) => b.classId === c.id).length}</b></button>${button("edit-class", "", "edit", "icon-only ghost", `data-id="${esc(c.id)}" aria-label="${t("editClass")} ${esc(c.name)}" ${busy ? "disabled" : ""}`)}</div>`).join("")}<p class="small muted">${t("classSharedHelp")}</p></aside><section class="batch-list"><div class="library-toolbar"><input id="library-search" type="search" value="${esc(librarySearch)}" placeholder="${t("searchBatches")}" aria-label="${t("searchBatches")}"><select id="library-state" aria-label="${t("batchStatus")}">${["active", "archived", "all"].map((s) => `<option value="${s}" ${libraryState === s ? "selected" : ""}>${t(s === "active" ? "activeBatches" : s === "archived" ? "archivedBatch" : "allBatches")}</option>`).join("")}</select><select id="library-sort" aria-label="${t("sortBatches")}"><option value="updated" ${librarySort === "updated" ? "selected" : ""}>${t("sortUpdated")}</option><option value="exam" ${librarySort === "exam" ? "selected" : ""}>${t("sortExam")}</option></select></div><div id="batch-cards" class="batch-cards">${batchCardsHTML()}</div></section></div><div class="notice library-storage-note">${t("libraryStorageHelp")}</div>`
+    );
+  }
+  function showClassForm(id) {
+    const c = catalog.classes.find((c) => c.id === id) || {
+      id: "",
+      name: "",
+      note: "",
+    };
+    const used = catalog.batches.some((b) => b.classId === c.id);
+    showDialog(
+      dialogHeading(t(c.id ? "editClass" : "newClass")) +
+        `<form id="class-form" data-id="${esc(c.id)}"><div class="dialog-body stack"><div class="field"><label for="class-name">${t("className")}</label><input id="class-name" required maxlength="100" value="${esc(c.name)}"></div><div class="field"><label for="class-note">${t("classNote")}</label><input id="class-note" maxlength="200" value="${esc(c.note)}" placeholder="${t("classNoteHint")}"></div><p class="small muted">${t("classRenameHelp")}</p></div><footer class="dialog-footer">${c.id ? button("delete-class", t("deleteClass"), "trash", "danger", `type="button" data-id="${esc(c.id)}" ${used ? "disabled" : ""} title="${t("classDeleteHelp")}"`) : ""}${button("close", t("cancel"), "", "", 'type="button"')}<button class="btn primary" type="submit">${t("save")}</button></footer>${used ? `<p class="dialog-footnote">${t("classDeleteHelp")}</p>` : ""}</form>`,
+    );
+  }
+  function showBatchForm(id) {
+    const b = catalog.batches.find((b) => b.id === id);
+    if (!b) return;
+    showDialog(
+      dialogHeading(t("editBatch")) +
+        `<form id="edit-batch-form" data-id="${esc(b.id)}"><div class="dialog-body stack"><div class="field"><label for="edit-batch-title">${t("examTitle")}</label><input id="edit-batch-title" required maxlength="150" value="${esc(b.title)}"></div><div class="field"><label for="edit-batch-class">${t("className")}</label><select id="edit-batch-class">${classOptions(b.classId)}</select></div><div class="field"><label for="edit-batch-date">${t("examDate")}</label><input id="edit-batch-date" type="date" value="${esc(b.examDate)}"></div></div><footer class="dialog-footer">${button("close", t("cancel"), "", "", 'type="button"')}<button class="btn primary" type="submit">${t("save")}</button></footer></form>`,
+    );
+  }
+  async function exportAllBatches() {
+    if (busy) return toast(t("busy"));
+    busy = true;
+    render();
+    try {
+      await saveChain;
+      if (!storageReady) throw new Error(saveState);
+      const snapshot = await L.readAll(db);
+      if (snapshot.metadata.revision !== storageRevision)
+        throw new Error("libraryConflict");
+      // Export also rescues active in-memory work when storage quota is exhausted.
+      const library = L.validateCatalog(structuredClone(catalog));
+      Object.assign(
+        library.batches.find((b) => b.id === catalog.activeBatchId),
+        L.summarize(w),
+      );
+      library.batches = library.batches.map((b) => ({
+        ...b,
+        workspace: L.normalizeWorkspace(
+          b.id === catalog.activeBatchId
+            ? w
+            : snapshot.records.find((r) => r.id === b.id)?.workspace,
+          b,
+          library.classes,
+        ),
+      }));
+      download(
+        JSON.stringify(
+          {
+            format: "gradeflow",
+            version: 3,
+            exportedAt: new Date().toISOString(),
+            library,
+            templates,
+            commentBank,
+          },
+          null,
+          2,
+        ),
+        "application/json",
+        "gradeflow-all-classes-backup.json",
+      );
+      toast(t("backedUp"));
+    } catch (error) {
+      toast(errText(error));
+    } finally {
+      busy = false;
+      render();
+    }
+  }
+
   function render() {
     document.documentElement.lang = lang === "en" ? "en" : "zh-CN";
     document.title = `${t("brand")} · ${t(view)}`;
     const n = counts();
     $("#app").innerHTML = `<aside class="sidebar">
       <a class="brand" href="#" data-action="view" data-view="workspace"><img src="${assetURL("assets/favicon.svg")}" alt=""><div><strong>${esc(t("brand"))}</strong><small>${lang === "en" ? "TEACHER WORKSPACE" : "GRADEFLOW"}</small></div></a>
-      <div class="workspace-select"><span class="avatar">${icon("book")}</span><div><div class="small">${esc(w.className || t("defaultClass"))}</div><small class="muted">${esc(t("localOnly"))}</small></div></div>
+      <button class="workspace-select" data-action="view" data-view="library"><span class="avatar">${icon("book")}</span><div><div class="small">${esc(w.className || t("defaultClass"))}</div><small class="muted">${esc(t("switchBatch"))}</small></div></button>
       <div class="nav-caption">${t("tools")}</div>
       <nav aria-label="${esc(t("tools"))}">${[
         ["workspace", "grid"],
+        ["library", "clock"],
         ["rubrics", "book"],
         ["comments", "edit"],
         ["insights", "chart"],
@@ -299,8 +609,8 @@
             `<button class="nav-item ${view === key ? "active" : ""}" data-action="view" data-view="${key}" ${view === key ? 'aria-current="page"' : ""}>${icon(ico)}${t(key)}${key === "workspace" && n.total ? `<span class="nav-count">${n.total}</span>` : ""}</button>`,
         )
         .join("")}</nav>
-      <div class="sidebar-bottom"><button class="nav-item" data-action="view" data-view="help">${icon("help")}${t("help")}</button><button class="nav-item" data-action="backup">${icon("download")}${t("backup")}</button><button class="nav-item" data-action="restore">${icon("upload")}${t("restore")}</button><div class="local-card"><div class="row">${icon("shield")}<strong>${t("localFirst")}</strong></div><p>${t("localNote")}</p></div><div class="side-footer">GRADEFLOW · v2.1</div></div>
-    </aside><div class="shell"><header class="topbar"><div class="breadcrumb">${icon("book")}<span>${t("myWorkspace")}</span><span>/</span><b>${t(view)}</b></div><div class="top-actions"><span class="save-state" id="save-state"></span><button class="language" data-action="language">${t("language")}</button><span class="avatar">${lang === "en" ? "T" : "师"}</span></div></header><main id="main" class="main" tabindex="-1">${view === "workspace" ? workspaceHTML() : view === "rubrics" ? rubricsHTML() : view === "comments" ? commentsHTML() : view === "insights" ? insightsHTML() : view === "settings" ? settingsHTML() : helpHTML()}<footer class="page-footer">${t("tagline")} &nbsp;·&nbsp; GradeFlow</footer></main></div>`;
+      <div class="sidebar-bottom"><button class="nav-item" data-action="view" data-view="help">${icon("help")}${t("help")}</button><button class="nav-item" data-action="backup">${icon("download")}${t("backup")}</button><button class="nav-item" data-action="restore">${icon("upload")}${t("restore")}</button><div class="local-card"><div class="row">${icon("shield")}<strong>${t("localFirst")}</strong></div><p>${t("localNote")}</p></div><div class="side-footer">GRADEFLOW · v2.2</div></div>
+    </aside><div class="shell"><header class="topbar"><div class="breadcrumb">${icon("book")}<span>${t("myWorkspace")}</span><span>/</span><b>${t(view)}</b></div><div class="top-actions"><span class="save-state" id="save-state"></span><button class="language" data-action="language">${t("language")}</button><span class="avatar">${lang === "en" ? "T" : "师"}</span></div></header><main id="main" class="main" tabindex="-1">${!storageReady ? `<div class="notice error">${t(saveState)} ${button("reload-app", t("reloadApp"), "rotate", "sm")}</div>` : ""}${view === "workspace" ? workspaceHTML() : view === "library" ? libraryHTML() : view === "rubrics" ? rubricsHTML() : view === "comments" ? commentsHTML() : view === "insights" ? insightsHTML() : view === "settings" ? settingsHTML() : helpHTML()}<footer class="page-footer">${t("tagline")} &nbsp;·&nbsp; GradeFlow</footer></main></div>`;
     updateSave();
     if (view === "settings") {
       $("#api-key").value = apiKey;
@@ -337,7 +647,7 @@
       ) +
       `${w.demo ? `<div class="notice">${icon("spark")}${t("demoBanner")}</div>` : ""}
       <div class="workflow">${["step1", "step2", "step3", "step4"].map((key, i) => `${i ? '<span class="workflow-line"></span>' : ""}<div class="workflow-step ${(i === 0 && rubricValid()) || (i === 1 && n.total) ? "complete" : ""} ${i === (n.approved ? 3 : n.total ? 2 : rubricValid() ? 1 : 0) ? "current" : ""}"><span>${(i === 0 && rubricValid()) || (i === 1 && n.total) ? "✓" : i + 1}</span>${t(key)}</div>`).join("")}</div>
-      <div class="metrics">${metric("totalPapers", n.total, w.className || t("defaultClass"), "file")}${metric("graded", n.graded, t("draftLabel"), "spark")}${metric("reviewQueue", n.review, t("resultIntro"), "clock", "amber")}${metric("approved", n.approved, t("localNote"), "circleCheck", "green")}</div>
+      ${batchContextHTML()}<div class="metrics">${metric("totalPapers", n.total, w.className || t("defaultClass"), "file")}${metric("graded", n.graded, t("draftLabel"), "spark")}${metric("reviewQueue", n.review, t("resultIntro"), "clock", "amber")}${metric("approved", n.approved, t("localNote"), "circleCheck", "green")}</div>
       <div class="overview-row"><section class="rubric-callout"><div><h2>${t("rubricCard")}</h2><p>${t("rubricCardText")}</p><button class="text-button" data-action="view" data-view="rubrics">${t("editRubric")}${icon("arrow")}</button></div><div class="illustration" aria-hidden="true"><div class="mini-paper back"></div><div class="mini-paper"><i></i><i></i><i></i><i></i><span class="check">✓</span></div></div></section><section class="progress-card"><div class="progress-ring" style="--progress:${progress}%"><strong>${progress}<small>%</small></strong></div><div><h3>${t("batchProgress")}</h3><p>${n.approved} / ${n.total} &nbsp;${t("confirmed")}</p><button class="text-button" data-action="filter" data-filter="review">${t("reviewQueue")}${icon("arrow")}</button></div></section></div>
       <section aria-labelledby="submissions-heading"><div class="section-header"><div><h2 id="submissions-heading">${esc(w.title || t("batchTitle"))}<span class="count">${n.total}</span></h2><p>${rubricValid() ? `${esc(w.rubric.title || t("rubricReady"))} · ${w.rubric.questions.length} ${t("questions")} · ${totalMax} ${t("points")}` : t("batchSubtitle")}</p></div><div class="row wrap">${button("review-by-question", t("byQuestion"), "book", "soft", n.graded ? "" : "disabled")}${button("export", t("export"), "download", "", n.graded ? "" : "disabled")}${button("add-student", t("newStudent"), "plus", "", busy ? "disabled" : "")}${button(batch ? "stop" : "grade-pending", t(batch ? "stop" : "gradePending"), batch ? "stop" : "spark", "primary", !batch && busy ? "disabled" : "")}</div></div>
       ${batch ? `<div class="batch-banner"><span>${t("grading")} ${batch.done} / ${batch.total}</span><progress value="${batch.done}" max="${batch.total}"></progress><span>${esc(batch.current || "")}</span></div>` : ""}
@@ -491,9 +801,11 @@
     return `<header class="dialog-header"><h2>${esc(title)}</h2><button class="btn icon-only ghost" data-action="close" aria-label="${t("close")}">${icon("close")}</button></header>`;
   }
   function showNewBatch() {
+    const selectedClass =
+      catalog.classes.find((c) => c.id === libraryClass)?.name || w.className;
     showDialog(
       dialogHeading(t("newBatch")) +
-        `<form id="new-batch-form"><div class="dialog-body stack"><div class="field"><label for="batch-title">${t("examTitle")}</label><input id="batch-title" type="text" maxlength="150" required placeholder="${t("defaultTitle")}"></div><div class="field"><label for="batch-class">${t("className")}</label><input id="batch-class" type="text" maxlength="100" placeholder="${t("defaultClass")}"></div>${w.students.length ? `<p>${t("newConfirm")}</p>` : ""}</div><footer class="dialog-footer">${button("close", t("cancel"), "", "", 'type="button"')}<button class="btn primary" type="submit">${t("confirm")}</button></footer></form>`,
+        `<form id="new-batch-form"><div class="dialog-body stack"><div class="field"><label for="batch-title">${t("examTitle")}</label><input id="batch-title" type="text" maxlength="150" required placeholder="${t("defaultTitle")}"></div><div class="field"><label for="batch-class">${t("className")}</label><input id="batch-class" type="text" maxlength="100" value="${esc(selectedClass)}" list="class-names" placeholder="${t("unassignedClass")}"><datalist id="class-names">${catalog.classes.map((c) => `<option value="${esc(c.name)}"></option>`).join("")}</datalist><small>${t("classInputHelp")}</small></div><div class="field"><label for="batch-date">${t("examDate")}</label><input id="batch-date" type="date"></div><label class="check-label"><input id="batch-copy-rubric" type="checkbox" ${w.rubric.questions.length ? "checked" : ""}>${t("copyCurrentRubric")}</label><p class="small muted">${t("newConfirm")}</p></div><footer class="dialog-footer">${button("close", t("cancel"), "", "", 'type="button"')}<button class="btn primary" type="submit">${t("confirm")}</button></footer></form>`,
     );
   }
   function addStudentDialog() {
@@ -914,8 +1226,7 @@
             "4. Find the perimeter of a rectangle, 8 cm long and 5 cm wide.",
             "5. Calculate 3/4 + 1/4.",
             "6. Share 24 apples equally among 6 students. How many each?",
-            "7. A book has 120 pages. Read 1/4, then another 30 pages.",
-            "   How many pages remain?",
+            "7. A book has 120 pages. Read 1/4, then another 30 pages.\n   How many pages remain?",
           ]
         : [
             "1. 计算 23 + 58。",
@@ -924,8 +1235,7 @@
             "4. 长方形长 8 厘米，宽 5 厘米，周长是多少？",
             "5. 计算 3/4 + 1/4。",
             "6. 24 个苹果平均分给 6 个同学，每人分到几个？",
-            "7. 一本书 120 页，第一天看了 1/4，第二天看了 30 页，",
-            "   还剩多少页？",
+            "7. 一本书 120 页，第一天看了 1/4，第二天看了 30 页，\n   还剩多少页？",
           ];
     const answers = [
       "23 + 58 = 81",
@@ -939,28 +1249,23 @@
         : variant === 1
           ? "120 − 30 − 30 = 50"
           : "120 − 120 × 1/4 − 30 = 60",
-      variant === 0
-        ? ""
-        : variant === 1
-          ? "50 pages"
-          : variant === 2
-            ? "…"
-            : "60 pages",
     ];
     let y = 275;
     qs.forEach((q, i) => {
       ctx.fillStyle = "#3f493d";
       ctx.font = '21px "Segoe UI","Microsoft YaHei",sans-serif';
-      ctx.fillText(q, 70, y);
+      const lines = q.split("\n"),
+        extra = (lines.length - 1) * 30;
+      lines.forEach((line, index) => ctx.fillText(line, 70, y + index * 30));
       ctx.fillStyle = "#345e91";
       ctx.font = 'italic 29px "Segoe UI","KaiTi",sans-serif';
-      ctx.fillText(answers[i], 100, y + 53);
+      ctx.fillText(answers[i], 100, y + 53 + extra);
       ctx.strokeStyle = "#e8ecdf";
       ctx.beginPath();
-      ctx.moveTo(70, y + 83);
-      ctx.lineTo(1030, y + 83);
+      ctx.moveTo(70, y + 83 + extra);
+      ctx.lineTo(1030, y + 83 + extra);
       ctx.stroke();
-      y += 143;
+      y += 143 + extra;
     });
     ctx.fillStyle = "#adb59e";
     ctx.font = "14px sans-serif";
@@ -1001,6 +1306,7 @@
   }
   async function loadDemo() {
     if (w.students.length && !confirm(t("demoConfirm"))) return;
+    const previousWorkspace = w;
     w = {
       title: lang === "en" ? "Mathematics · Unit 3" : "数学 · 第三单元小测",
       className: lang === "en" ? "Grade 3 · Class B" : "三年级（2）班",
@@ -1037,12 +1343,12 @@
       }
       return s;
     });
-    view = "workspace";
-    filter = "all";
-    search = "";
-    closeDialog();
-    render();
-    await save();
+    const demoWorkspace = w;
+    w = previousWorkspace;
+    await libraryTask(async () => {
+      await createSavedBatch(demoWorkspace);
+      toast(t("demoLoaded"));
+    });
   }
   function invalidatePaper(s) {
     s.result = null;
@@ -1405,14 +1711,14 @@
     closeDialog();
     toast(t("exported"));
   }
-  async function backup() {
+  async function backup(workspace = w) {
     download(
       JSON.stringify(
         {
           format: "gradeflow",
           version: 2,
           exportedAt: new Date().toISOString(),
-          workspace: w,
+          workspace,
           templates,
           commentBank,
         },
@@ -1420,7 +1726,7 @@
         2,
       ),
       "application/json",
-      `${fileName(w.title)}-backup.json`,
+      `${fileName(workspace.title)}-backup.json`,
     );
     toast(t("backedUp"));
   }
@@ -1429,7 +1735,8 @@
     if (file.size > 180 * 1024 * 1024) return toast(t("invalidBackup"));
     try {
       const raw = JSON.parse(await file.text());
-      const restored = C.validateBackup(raw);
+      const archive = raw.version === 3 ? L.validateArchive(raw) : null;
+      const restored = archive ? null : C.validateBackup(raw);
       const restoredTemplates = Array.isArray(raw.templates)
         ? raw.templates.slice(0, 100).map((r) => ({
             id: uid(),
@@ -1441,22 +1748,39 @@
         raw.commentBank === undefined
           ? commentBank
           : C.validateCommentBank(raw.commentBank);
-      if (w.students.length && !confirm(t("restoreConfirm"))) return;
-      w = restored;
-      templates = restoredTemplates;
-      commentBank = restoredComments;
-      editingComment = null;
-      commentSearch = "";
-      commentCategory = "all";
-      favoritesOnly = false;
-      pageMemory.clear();
-      view = "workspace";
-      filter = "all";
-      search = "";
-      closeDialog();
-      render();
-      await save();
-      toast(t("restored"));
+      if (
+        (archive || w.students.length) &&
+        !confirm(t(archive ? "restoreAllConfirm" : "restoreConfirm"))
+      )
+        return;
+      await libraryTask(async () => {
+        const globals = {
+          templates: restoredTemplates,
+          commentBank: restoredComments,
+        };
+        if (archive) {
+          await commitCatalog(
+            archive.catalog,
+            archive.records,
+            [],
+            globals,
+            true,
+          );
+          w = archive.records.find(
+            (r) => r.id === catalog.activeBatchId,
+          ).workspace;
+          resetBatchView();
+          view = "workspace";
+        } else await createSavedBatch(restored, "", globals);
+        editingComment = null;
+        commentSearch = "";
+        commentCategory = "all";
+        favoritesOnly = false;
+        libraryClass = "all";
+        libraryState = "active";
+        librarySearch = "";
+        toast(t("restored"));
+      });
     } catch {
       toast(t("invalidBackup"));
     }
@@ -1522,6 +1846,15 @@
     "confirm-question",
     "confirm-next",
     "undo-question",
+    "new-class",
+    "edit-class",
+    "delete-class",
+    "open-batch",
+    "edit-batch",
+    "archive-batch",
+    "delete-batch",
+    "backup-batch",
+    "backup-all",
   ]);
   async function handleAction(el) {
     const action = el.dataset.action;
@@ -1529,6 +1862,81 @@
     if (busy && guarded.has(action)) return toast(t("busy"));
     try {
       switch (action) {
+        case "reload-app":
+          location.reload();
+          break;
+        case "filter-class":
+          libraryClass = el.dataset.id;
+          render();
+          break;
+        case "new-class":
+          showClassForm();
+          break;
+        case "edit-class":
+          showClassForm(el.dataset.id);
+          break;
+        case "edit-batch":
+          showBatchForm(el.dataset.id);
+          break;
+        case "open-batch":
+          await openSavedBatch(el.dataset.id);
+          break;
+        case "backup-all":
+          await exportAllBatches();
+          break;
+        case "backup-batch":
+          await libraryTask(async () => {
+            const b = catalog.batches.find((b) => b.id === el.dataset.id);
+            await backup(
+              L.normalizeWorkspace(
+                await L.read(db, "batches", b.id),
+                b,
+                catalog.classes,
+              ),
+            );
+          });
+          break;
+        case "archive-batch":
+          await libraryTask(async () => {
+            const next = structuredClone(catalog),
+              b = next.batches.find((b) => b.id === el.dataset.id);
+            b.archived = !b.archived;
+            await commitCatalog(next);
+            toast(t(b.archived ? "batchArchived" : "batchUnarchived"));
+          });
+          break;
+        case "delete-batch": {
+          const target = catalog.batches.find((b) => b.id === el.dataset.id);
+          if (!target || target.id === catalog.activeBatchId) break;
+          if (
+            !confirm(
+              `${t("deleteBatchConfirm")}\n${classLabel(target.classId)} · ${target.title || t("defaultTitle")}`,
+            )
+          )
+            break;
+          await libraryTask(async () => {
+            const next = structuredClone(catalog);
+            next.batches = next.batches.filter((b) => b.id !== target.id);
+            await commitCatalog(next, [], [target.id]);
+            toast(t("batchDeleted"));
+          });
+          break;
+        }
+        case "delete-class": {
+          const id = el.dataset.id;
+          if (catalog.batches.some((b) => b.classId === id))
+            return toast(t("classDeleteHelp"));
+          if (!confirm(t("deleteClassConfirm"))) break;
+          await libraryTask(async () => {
+            const next = structuredClone(catalog);
+            next.classes = next.classes.filter((c) => c.id !== id);
+            await commitCatalog(next);
+            closeDialog();
+            libraryClass = "all";
+            toast(t("classDeleted"));
+          });
+          break;
+        }
         case "review-by-question":
           startQuestionReview();
           break;
@@ -1888,6 +2296,66 @@
     }
   });
   document.addEventListener("submit", async (e) => {
+    if (e.target.id === "class-form") {
+      e.preventDefault();
+      if (busy) return;
+      const id = e.target.dataset.id || uid(),
+        name = $("#class-name").value.trim(),
+        note = $("#class-note").value.trim();
+      if (!name) return;
+      if (
+        catalog.classes.some(
+          (c) => c.id !== id && L.nameKey(c.name) === L.nameKey(name),
+        )
+      )
+        return toast(t("duplicateClass"));
+      await libraryTask(async () => {
+        const next = structuredClone(catalog),
+          existing = next.classes.find((c) => c.id === id);
+        if (existing) Object.assign(existing, { name, note });
+        else {
+          if (next.classes.length >= 200) throw new Error("libraryLimit");
+          next.classes.push({ id, name, note });
+        }
+        await commitCatalog(next);
+        w.className =
+          catalog.classes.find((c) => c.id === currentBatch().classId)?.name ||
+          "";
+        closeDialog();
+        view = "library";
+        libraryClass = id;
+        toast(t("classSaved"));
+      });
+      return;
+    }
+    if (e.target.id === "edit-batch-form") {
+      e.preventDefault();
+      if (busy) return;
+      const id = e.target.dataset.id,
+        title = $("#edit-batch-title").value.trim(),
+        classId = $("#edit-batch-class").value || null,
+        examDate = $("#edit-batch-date").value;
+      if (!title) return;
+      await libraryTask(async () => {
+        const next = structuredClone(catalog),
+          b = next.batches.find((b) => b.id === id);
+        Object.assign(b, {
+          title,
+          classId,
+          examDate,
+          updatedAt: new Date().toISOString(),
+        });
+        await commitCatalog(next);
+        if (id === catalog.activeBatchId) {
+          w.title = title;
+          w.className =
+            catalog.classes.find((c) => c.id === classId)?.name || "";
+        }
+        closeDialog();
+        toast(t("batchSaved"));
+      });
+      return;
+    }
     if (e.target.id === "comment-form") {
       e.preventDefault();
       try {
@@ -1916,19 +2384,20 @@
       if (busy) return;
       const title = $("#batch-title").value.trim();
       if (!title) return;
-      w = {
+      const workspace = {
         ...emptyWorkspace(),
-        rubric: w.rubric,
+        rubric: $("#batch-copy-rubric").checked
+          ? structuredClone(w.rubric)
+          : defaultRubric(),
         strictness: w.strictness,
         title,
         className: $("#batch-class").value.trim(),
       };
-      view = "workspace";
-      filter = "all";
-      search = "";
-      closeDialog();
-      render();
-      await save();
+      const examDate = $("#batch-date").value;
+      await libraryTask(async () => {
+        await createSavedBatch(workspace, examDate);
+        toast(t("batchCreated"));
+      });
     }
     if (e.target.id === "add-student-form") {
       e.preventDefault();
@@ -1947,6 +2416,11 @@
   });
   document.addEventListener("input", (e) => {
     const el = e.target;
+    if (el.id === "library-search") {
+      librarySearch = el.value;
+      $("#batch-cards").innerHTML = batchCardsHTML();
+      return;
+    }
     if (el.id === "comment-search") {
       commentSearch = el.value;
       $("#comment-cards").innerHTML = commentCardsHTML();
@@ -1983,6 +2457,20 @@
   });
   document.addEventListener("change", async (e) => {
     const el = e.target;
+    if (el.id === "library-state") {
+      libraryState = el.value;
+      $("#batch-cards").innerHTML = batchCardsHTML();
+      return;
+    }
+    if (el.id === "library-sort") {
+      librarySort = el.value;
+      $("#batch-cards").innerHTML = batchCardsHTML();
+      return;
+    }
+    if (el.id === "batch-switch") {
+      if (!busy) await openSavedBatch(el.value);
+      return;
+    }
     if (el.id === "comment-category-filter") {
       commentCategory = el.value;
       $("#comment-cards").innerHTML = commentCardsHTML();
@@ -2146,7 +2634,7 @@
     if (!$("#dialog").open) selected = null;
   });
   window.addEventListener("beforeunload", (e) => {
-    if (busy || saveState === "saving" || saveState === "saveFailed") {
+    if (busy || saveState !== "localSaved") {
       e.preventDefault();
       e.returnValue = "";
     }

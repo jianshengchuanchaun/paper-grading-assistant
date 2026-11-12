@@ -1,6 +1,140 @@
 (function (root) {
   "use strict";
   const pairs = {
+    library: ["班级与批次", "Classes & history"],
+    libraryTitle: [
+      "每个班级，每次进步，都有记录",
+      "Every class. Every assessment. All here.",
+    ],
+    libraryIntro: [
+      "保存不同班级、不同考试的试卷与批改记录。切换时自动保存，随时回来继续。",
+      "Keep papers and grading records organized by class and assessment. Save before switching and resume whenever you need.",
+    ],
+    currentBatch: ["当前考试", "Current assessment"],
+    switchBatch: ["切换考试", "Switch assessment"],
+    manageBatches: ["管理历史批次", "Manage history"],
+    unassignedClass: ["未分班", "Unassigned"],
+    allClasses: ["全部班级", "All classes"],
+    myClasses: ["我的班级", "My classes"],
+    classCount: ["个班级", "classes"],
+    batchCount: ["场考试", "assessments"],
+    newClass: ["新建班级", "New class"],
+    editClass: ["编辑班级", "Edit class"],
+    classNote: ["备注（可选）", "Note (optional)"],
+    classNoteHint: [
+      "例如：2026 学年 · 秋季学期",
+      "e.g. 2026 school year · Fall term",
+    ],
+    classRenameHelp: [
+      "修改班级名称会同步显示在该班级所有考试中，试卷与成绩保持不变。",
+      "Renaming a class updates its label across all assessments while preserving papers and grades.",
+    ],
+    duplicateClass: [
+      "已有同名班级，请使用已有班级或换一个名称。",
+      "A class with this name already exists. Use it or choose a different name.",
+    ],
+    classSaved: ["班级已保存", "Class saved"],
+    classDeleted: ["班级已删除", "Class deleted"],
+    deleteClass: ["删除空班级", "Delete empty class"],
+    deleteClassConfirm: ["删除这个空班级？", "Delete this empty class?"],
+    classDeleteHelp: [
+      "只有不包含考试的空班级可以删除，请先移动或删除其考试（含归档）。",
+      "Only empty classes can be deleted. Move or delete their assessments, including archived ones, first.",
+    ],
+    classSharedHelp: [
+      "评语库与评分模板在所有班级之间共用。",
+      "Comment banks and rubric templates are shared across classes.",
+    ],
+    classInputHelp: [
+      "选择已有班级，或输入新名称自动创建；留空则不分班。",
+      "Choose an existing class or type a new name to create one. Leave empty for Unassigned.",
+    ],
+    examDate: ["考试日期（可选）", "Assessment date (optional)"],
+    noExamDate: ["未设置考试日期", "No assessment date"],
+    copyCurrentRubric: [
+      "复用当前考试的评分标准",
+      "Reuse the current assessment's rubric",
+    ],
+    batchCreated: [
+      "新考试已创建，原记录已保留",
+      "Assessment created; previous records kept",
+    ],
+    batchOpened: ["已切换考试", "Assessment opened"],
+    batchSaved: ["考试信息已保存", "Assessment details saved"],
+    activeBatches: ["未归档", "Not archived"],
+    archivedBatch: ["已归档", "Archived"],
+    allBatches: ["全部考试", "All assessments"],
+    batchStatus: ["归档状态", "Archive status"],
+    searchBatches: [
+      "搜索考试、班级或日期…",
+      "Search assessment, class or date…",
+    ],
+    sortBatches: ["排序方式", "Sort assessments"],
+    sortUpdated: ["最近保存优先", "Recently saved first"],
+    sortExam: ["考试日期降序", "Newest assessment date"],
+    lastEdited: ["最近保存", "Last saved"],
+    papers: ["份试卷", "papers"],
+    demoTag: ["虚构示例", "Demo"],
+    demoLoaded: [
+      "已新建示例考试，原考试保留在历史记录中",
+      "Demo assessment created; previous assessments kept in history",
+    ],
+    continueBatch: ["继续批改", "Continue marking"],
+    openBatch: ["打开考试", "Open assessment"],
+    editBatch: ["编辑信息", "Edit details"],
+    archiveBatch: ["归档", "Archive"],
+    unarchiveBatch: ["取消归档", "Unarchive"],
+    batchArchived: [
+      "已归档，记录保留在「已归档」列表中",
+      "Archived. Records remain in the Archived list",
+    ],
+    batchUnarchived: ["已取消归档", "Assessment unarchived"],
+    deleteBatch: ["删除考试", "Delete assessment"],
+    switchBeforeDelete: [
+      "请先切换到另一场考试，再删除此记录",
+      "Switch to another assessment before deleting this one",
+    ],
+    deleteBatchConfirm: [
+      "永久删除下面这场考试的试卷、成绩和复核记录？此操作不能撤销，其他考试不会受影响。",
+      "Permanently delete the following assessment, its papers, grades and review history? This cannot be undone. Other assessments are unaffected.",
+    ],
+    batchDeleted: ["考试记录已删除", "Assessment deleted"],
+    backupOne: ["备份本场", "Back up assessment"],
+    backupAll: ["备份全部班级", "Back up all classes"],
+    restoreAllConfirm: [
+      "这是一份全部班级备份。恢复会替换本机现有的所有班级、考试、模板和评语库，请先备份要保留的记录。确认恢复？",
+      "This is an all-classes backup. Restoring replaces all local classes, assessments, templates and comments. Back up records you want to keep first. Restore?",
+    ],
+    noBatches: ["这里还没有匹配的考试", "No matching assessments"],
+    noBatchesHelp: [
+      "调整搜索或归档筛选，或者为这个班级新建考试。",
+      "Change the search or archive filter, or create an assessment for this class.",
+    ],
+    libraryStorageHelp: [
+      "记录保存在当前浏览器，不会自动上传 GitHub 或跨设备同步。换电脑前请备份全部班级；归档只整理列表，不删除记录。最多 200 个班级、200 场考试，实际容量取决于浏览器。",
+      "Records stay in this browser; they are not uploaded to GitHub or synced across devices. Back up all classes before moving computers. Archiving organizes the list without deleting records. Up to 200 classes and 200 assessments, subject to browser storage capacity.",
+    ],
+    libraryLimit: [
+      "已达到 200 个班级或 200 场考试的上限，请先备份并清理不再需要的记录。",
+      "The 200-class or 200-assessment limit has been reached. Back up and remove records you no longer need.",
+    ],
+    invalidLibrary: [
+      "班级备份或历史记录格式无效，原记录未修改。",
+      "Invalid class archive or history format. Existing records were not changed.",
+    ],
+    libraryConflict: [
+      "另一标签页已更新记录。请备份本场未保存的修改，再刷新页面后继续，避免覆盖其他记录。",
+      "Another tab updated the records. Export any unsaved changes from this assessment, then reload before continuing.",
+    ],
+    storageBlocked: [
+      "请关闭其他仍打开旧版阅卷有方的标签页，再刷新完成数据升级。",
+      "Close other tabs still running an older GradeFlow version, then reload to upgrade storage.",
+    ],
+    storageLoadFailed: [
+      "无法读取原有记录，已停止写入以保留数据。请刷新重试，不要清除浏览器数据。",
+      "Existing records could not be loaded. Writes are stopped to preserve data. Reload to retry without clearing browser data.",
+    ],
+    reloadApp: ["刷新页面", "Reload"],
     comments: ["常用评语", "Comment bank"],
     commentLibraryTitle: [
       "把好的反馈，留给下一次",
@@ -202,7 +336,7 @@
     cancel: ["取消", "Cancel"],
     stop: ["停止批改", "Stop grading"],
     export: ["导出成绩", "Export grades"],
-    backup: ["备份工作区", "Back up workspace"],
+    backup: ["备份当前考试", "Back up current assessment"],
     restore: ["恢复备份", "Restore backup"],
     retry: ["重试", "Retry"],
     regrade: ["重新批改", "Regrade"],
@@ -215,12 +349,12 @@
       "DEMO WORKSPACE · Fictional students, papers and scores. No AI calls.",
     ],
     demoConfirm: [
-      "载入示例会替换当前工作区。请先导出需要保留的备份。继续吗？",
-      "Loading the demo replaces this workspace. Export a backup first if needed. Continue?",
+      "将新建一场虚构的示例考试，当前考试会自动保存到历史记录。继续吗？",
+      "Create a fictional demo assessment? The current assessment will be saved in history.",
     ],
     newConfirm: [
-      "新建批次会清空当前学生与结果，保留评分标准。需要保留的数据请先备份。继续吗？",
-      "A new batch clears students and results, keeping your rubric. Back up anything you need first. Continue?",
+      "原考试会自动保存到历史记录。新考试不复制学生与成绩，可以选择复用评分标准。",
+      "The previous assessment is saved in history. Students and grades are not copied; reusing the rubric is optional.",
     ],
     deleteConfirm: [
       "确定删除这位学生的试卷与批改结果？",
@@ -381,8 +515,8 @@
     keyCleared: ["内存中的密钥已清除", "Key removed from memory"],
     guideTitle: ["五分钟，上手一次完整批改", "Your first grading session"],
     guide1: [
-      "1. 先定标准：填写每题题号、满分、答案和给分规则，保存为模板。",
-      "1. Set your rubric: question IDs, maximum points, expected answers and scoring criteria. Save a template.",
+      "1. 建班建考试：在「班级与批次」新建班级，再新建考试。旧记录会保留。填写题号、满分和评分规则，可以复用评分模板。",
+      "1. Organize and set your rubric: create a class in Classes & history, then a new assessment. Previous records are kept. Set question IDs, maxima and criteria, or reuse a rubric template.",
     ],
     guide2: [
       "2. 再传试卷：每个文件新建一位学生。多页 PDF 会自动展开；补充照片可进入学生详情添加。",
@@ -397,8 +531,8 @@
       "4. Review: check a whole paper by student, or select By question to keep one question in focus across students. Append reusable feedback from your Comment bank. Every question must be reviewed for official grades; score or feedback edits require renewed confirmation.",
     ],
     guide5: [
-      "5. 保存成果：导出成绩 CSV、打印每生反馈，或备份整个工作区。自定义评语库、收藏和逐题复核进度会一同保存。",
-      "5. Keep your work: export a gradebook CSV, print individual feedback or back up the workspace, including your comment bank, favorites and question review progress.",
+      "5. 留存与切换：导出成绩 CSV、打印反馈，在「班级与批次」切换或归档考试。换电脑前备份全部班级；单场备份会导入为新考试，全量恢复会替换整个资料库。",
+      "5. Keep and resume your work: export CSV or print feedback, then switch or archive assessments in Classes & history. Back up all classes before moving devices. Single-assessment imports add a new record; full restores replace the library.",
     ],
     guideLimits: [
       "目前不包含自动分割混合学生扫描件、LMS 同步或多人协同。每份 PDF 请只包含一位学生。",
@@ -421,8 +555,8 @@
       "Backup exported without API keys",
     ],
     restoreConfirm: [
-      "恢复备份会替换当前批次。继续吗？",
-      "Restoring replaces this workspace. Continue?",
+      "将此单场备份导入为一场新考试，保留已有考试，并恢复备份内的模板与评语库。继续吗？",
+      "Import this single-assessment backup as a new assessment, keeping existing assessments and restoring its templates and comment bank. Continue?",
     ],
     restored: ["工作区已恢复", "Workspace restored"],
     invalidRubric: [
