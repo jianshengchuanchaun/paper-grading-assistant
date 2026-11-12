@@ -143,6 +143,9 @@ test("backup round-trip keeps teacher and AI scores separately", () => {
   result.items[0].score = 9;
   result.items[0].adjusted = true;
   result.items[0].note = "Check units";
+  result.items.forEach((q) => {
+    q.reviewed = true;
+  });
   const restored = C.validateBackup(
     backup({
       students: [
@@ -211,4 +214,144 @@ test("every localization key has two nonempty languages", () => {
       key,
     );
   }
+});
+
+const student = () => ({
+  id: "review-student",
+  name: "Alex",
+  status: "done",
+  approved: false,
+  pages: [],
+  audit: [],
+  result: {
+    ...C.parseResult(raw, rubric),
+    rubric,
+    signature: C.signature(rubric, "standard"),
+  },
+});
+
+test("comment bank validates bilingual entries, limits and duplicate IDs", () => {
+  require("../assets/comments.js");
+  assert.equal(C.validateCommentBank(global.GradeCommentDefaults).length, 9);
+  const entry = {
+    id: "1",
+    category: "improve",
+    zh: " 检查单位 ",
+    en: "",
+    favorite: true,
+  };
+  const [valid] = C.validateCommentBank([entry]);
+  assert.equal(C.commentText(valid, "en"), "检查单位");
+  for (const bad of [
+    null,
+    [entry, entry],
+    [{ ...entry, category: "other" }],
+    [{ ...entry, zh: "", en: "" }],
+    [{ ...entry, zh: "x".repeat(601) }],
+    [{ ...entry, en: null }],
+    Array(201).fill(entry),
+  ]) {
+    assert.throws(() => C.validateCommentBank(bad), /invalidComments/);
+  }
+});
+
+test("reusable feedback appends without erasing notes or duplicating whole comments", () => {
+  assert.equal(
+    C.appendComment("Existing note", "New feedback"),
+    "Existing note\nNew feedback",
+  );
+  assert.equal(
+    C.appendComment("Existing note\nNew feedback", "New feedback"),
+    "Existing note\nNew feedback",
+  );
+  assert.equal(C.appendComment("a\nb\nc", "b\nc"), "a\nb\nc");
+  assert.equal(
+    C.appendComment("Discuss units", "units"),
+    "Discuss units\nunits",
+  );
+  assert.throws(() => C.appendComment("x".repeat(3000), "new"), /noteTooLong/);
+});
+
+test("question review approves a whole paper only after all questions, and edits revoke only the edited question", () => {
+  const s = student();
+  assert.equal(C.setQuestionReviewed(s, "1", rubric, "standard"), false);
+  assert.equal(s.result.items[0].reviewed, true);
+  assert.equal(s.result.items[1].reviewed, false);
+  assert.equal(C.setQuestionReviewed(s, "2", rubric, "standard"), true);
+  C.invalidateQuestion(s, "1");
+  assert.equal(s.approved, false);
+  assert.equal(s.result.items[0].reviewedAt, "");
+  assert.equal(s.result.items[1].reviewed, true);
+  C.setQuestionReviewed(s, "1", rubric, "standard");
+  assert.equal(C.setQuestionReviewed(s, "2", rubric, "standard", false), false);
+});
+
+test("question queues exclude stale and unfinished work and cannot confirm unscored answers", () => {
+  const current = student(),
+    outdated = student(),
+    pending = student();
+  outdated.id = "old";
+  outdated.result.signature = "old";
+  pending.id = "pending";
+  pending.status = "grading";
+  assert.deepEqual(
+    C.reviewCandidates([current, outdated, pending], rubric, "standard", "1"),
+    [current],
+  );
+  assert.deepEqual(
+    C.reviewCandidates([current], rubric, "standard", "missing"),
+    [],
+  );
+  for (const s of [outdated, pending])
+    assert.throws(
+      () => C.setQuestionReviewed(s, "1", rubric, "standard"),
+      /reviewUnavailable/,
+    );
+  current.result.items[0].score = null;
+  assert.throws(
+    () => C.setQuestionReviewed(current, "1", rubric, "standard"),
+    /incomplete/,
+  );
+  assert.equal(current.approved, false);
+});
+
+test("v2 backups migrate approved papers and preserve partial review and attention flags", () => {
+  const legacy = student();
+  legacy.approved = true;
+  legacy.result.items.forEach((q) => {
+    delete q.reviewed;
+    delete q.reviewedAt;
+  });
+  const old = C.validateBackup(backup({ students: [legacy] })).students[0];
+  assert.equal(old.approved, true);
+  assert.ok(old.result.items.every((q) => q.reviewed));
+  const partial = student();
+  C.setQuestionReviewed(partial, "1", rubric, "standard");
+  partial.result.items[1].needsReview = true;
+  const restored = C.validateBackup(backup({ students: [partial] }))
+    .students[0];
+  assert.equal(restored.approved, false);
+  assert.deepEqual(
+    restored.result.items.map((q) => q.reviewed),
+    [true, false],
+  );
+  assert.equal(restored.result.items[1].needsReview, true);
+  partial.approved = true;
+  assert.equal(
+    C.validateBackup(backup({ students: [partial] })).students[0].approved,
+    false,
+  );
+});
+
+test("AI output cannot mark its own grades as reviewed", () => {
+  const forged = structuredClone(raw);
+  forged.items.forEach((q) => {
+    q.reviewed = true;
+    q.reviewedAt = "now";
+  });
+  assert.ok(
+    C.parseResult(forged, rubric).items.every(
+      (q) => q.reviewed === false && !q.reviewedAt,
+    ),
+  );
 });

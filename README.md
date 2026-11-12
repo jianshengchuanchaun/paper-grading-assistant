@@ -15,8 +15,10 @@ Upload a student's paper, apply your own rubric, review the suggested marks alon
 - **Teacher-controlled rubrics:** explicit question IDs, maximum points, scoring criteria, reusable templates, and additional instructions.
 - **Images and PDFs:** JPG, PNG, WebP, multi-page PDF, drag and drop, and image paste inside a student's review. PDF pages render locally using bundled PDF.js.
 - **A focused review workspace:** original paper and marks side by side, zoom, page rotation, editable scores and comments, original AI scores, and an edit history.
+- **Review by question:** keep one question in focus while switching students, filter pending or flagged answers, and confirm a question before moving to the next unreviewed student. A paper becomes approved when every question is reviewed.
+- **Bilingual comment bank:** nine editable starter comments, your own Chinese/English feedback, three categories, search and favorites. Append feedback to a question without replacing existing notes or changing scores.
 - **Review before reporting:** incomplete answers stay unscored; official exports and class statistics only use complete, current, teacher-approved results.
-- **Resumable local work:** papers, scores and templates persist in IndexedDB. Export/import a JSON workspace backup, including pages and edit history.
+- **Resumable local work:** papers, scores, templates, reusable comments and per-question review progress persist in IndexedDB. Export/import a JSON workspace backup, including pages and edit history. Existing v2.0 workspaces remain compatible.
 - **Class insights:** score distribution, pass rate, per-question performance, and lower-scoring questions to discuss in class.
 - **Useful outputs:** Excel-compatible CSV with formula-injection protection; individual printable feedback that can be saved as PDF through the browser's print dialog.
 - **Your choice of model:** vision-capable OpenAI-compatible Chat Completions APIs, editable URL and model ID, plus an optional local relay for providers that do not allow browser calls.
@@ -41,10 +43,22 @@ For a real class:
 2. Import papers. **Each file creates one student; each PDF must contain one student's work.** Open a student to add more pages to the same paper.
 3. Configure a vision model in **AI settings**. A successful connection test checks text connectivity; use a sample paper to verify vision capability.
 4. Select **Grade pending**. The queue runs sequentially, supports stopping, and keeps completed results. Existing successful results are skipped. Individual regrading requires an explicit replacement confirmation.
-5. Review the original and suggested marks. Correct scores and add comments, then select **Approve reviewed grade**.
+5. Review the original and suggested marks. Use **By student** to approve a whole paper, or **By question** to confirm individual questions across students. Add feedback from your **Comment bank** as needed.
 6. Export official grades, print individual feedback, or back up the workspace.
 
 You can open `index.html` directly for the demo and basic image workflow. PDF module loading and the local relay require HTTP/HTTPS. Browser storage and direct API calls may also be restricted for `file://` pages; the local server or a static HTTPS host is recommended.
+
+## Two ways to make review easier
+
+In **Comment bank**, add or edit feedback under **Strengths**, **Improvements** or **Next steps**. Each entry can contain Chinese and English wording. The current interface language chooses which text is appended; if it is missing, the other language is used and labeled. These are editable templates, not automatic translations. Favorite frequently used comments and search either language. Inside a question, expand **Comment bank** and click a comment to append it. Existing feedback stays intact, and the same whole comment is not added twice. Editing or deleting a template leaves previously given feedback unchanged.
+
+![Bilingual comment library](docs/comments-zh.png)
+
+After generating AI drafts, choose **By question**, select a question ID, and use the student strip or arrow keys to compare that question across the class. **Confirm & next student** saves the current question's review and moves to the next unreviewed student in the current filter. The progress count shows how many eligible papers have that question reviewed. Unscored answers require a score before confirmation; unfinished or outdated drafts must be graded first. You can switch back to **By student** at any time.
+
+![Question review in English](docs/question-review-en.png)
+
+Confirming one question does not approve the entire paper. Every question must be reviewed and scored under the current rubric. Changing a score or feedback clears that question's confirmation and the paper's approval, keeping other question confirmations. Both new features work locally and make no extra AI calls. JSON backups include the bank and review progress; restoring an older backup without a bank keeps your current comments.
 
 ## Connecting an AI service
 
@@ -98,6 +112,7 @@ For Linux/macOS UI tests, install the Playwright browser once with `npx playwrig
 assets/app.js       UI, local persistence, import, grading queue and reports
 assets/core.js      Scoring validation, prompt construction, backup and CSV rules
 assets/i18n.js      Chinese and English UI strings
+assets/comments.js  Editable bilingual starter feedback
 assets/styles.css  Responsive workspace and review interface
 scripts/server.mjs Local static server and optional fixed-destination relay
 scripts/build.mjs  Portable static build, including PDF.js

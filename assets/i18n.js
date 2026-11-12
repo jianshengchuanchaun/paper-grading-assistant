@@ -1,6 +1,105 @@
 (function (root) {
   "use strict";
   const pairs = {
+    comments: ["常用评语", "Comment bank"],
+    commentLibraryTitle: [
+      "把好的反馈，留给下一次",
+      "Thoughtful feedback, ready to reuse",
+    ],
+    commentLibraryIntro: [
+      "维护自己的中英文评语，复核时一键追加。修改模板不会改变已经写给学生的评语。",
+      "Build your bilingual comment bank and append feedback during review. Editing a template never changes feedback already given.",
+    ],
+    newComment: ["新增评语", "New comment"],
+    editComment: ["编辑评语", "Edit comment"],
+    commentCategory: ["分类", "Category"],
+    strength: ["表扬与肯定", "Strengths"],
+    improve: ["待改进", "Improvements"],
+    nextStep: ["学习建议", "Next steps"],
+    commentChinese: ["中文评语", "Chinese feedback"],
+    commentEnglish: ["英文评语", "English feedback"],
+    commentLanguageHelp: [
+      "至少填写一种语言；另一种留空时使用已有文本，不会自动翻译。每种最多 600 字符。",
+      "Provide at least one language. If the other is empty, the existing text is used without automatic translation. Up to 600 characters each.",
+    ],
+    favorite: ["收藏", "Favorite"],
+    unfavorite: ["取消收藏", "Unfavorite"],
+    favoritesOnly: ["仅看收藏", "Favorites only"],
+    commentSearch: ["搜索评语…", "Search comments…"],
+    allCategories: ["所有分类", "All categories"],
+    commentEmpty: [
+      "暂无匹配评语，可以新增一条或调整筛选。",
+      "No matching comments. Add one or change the filters.",
+    ],
+    commentSaved: ["评语已保存", "Comment saved"],
+    commentDeleted: ["评语已删除", "Comment deleted"],
+    commentDeleteConfirm: [
+      "删除这条常用评语？已写给学生的评语会保留。",
+      "Delete this reusable comment? Feedback already given to students will be kept.",
+    ],
+    applyComment: ["追加评语", "Append feedback"],
+    commentApplied: [
+      "已追加到本题评语，请重新确认复核",
+      "Feedback appended. Please review this question again.",
+    ],
+    commentExists: ["本题已包含这条评语", "This feedback is already included"],
+    invalidComments: [
+      "评语库格式无效。最多 200 条，每种语言最多 600 字符，至少填写一种语言。",
+      "Invalid comment bank. Up to 200 entries, 600 characters per language, with at least one language provided.",
+    ],
+    noteTooLong: [
+      "追加后超过 3000 字符，请先精简当前评语。",
+      "This would exceed 3,000 characters. Shorten the existing feedback first.",
+    ],
+    fallbackLanguage: [
+      "使用另一种语言的原文",
+      "Using the other language's text",
+    ],
+    manageComments: ["管理评语库", "Manage comment bank"],
+    byStudent: ["按学生复核", "By student"],
+    byQuestion: ["按题复核", "By question"],
+    questionScore: ["本题得分", "Question score"],
+    paperScore: ["整卷总分", "Paper total"],
+    questionModeIntro: [
+      "固定题号，对照原卷连续复核不同学生。所有题目确认后，整卷才转为已确认。",
+      "Keep one question in focus across students. The whole paper is approved only after every question is reviewed.",
+    ],
+    chooseQuestion: ["选择题目", "Choose question"],
+    questionProgress: ["本题已复核", "Reviewed for this question"],
+    questionReviewed: ["本题已确认", "Question reviewed"],
+    questionPending: ["本题待复核", "Question needs review"],
+    questionConfirmed: ["已确认本题", "Question confirmed"],
+    questionUnreviewed: ["已撤销本题确认", "Question approval undone"],
+    confirmQuestion: ["确认本题", "Confirm question"],
+    confirmNext: ["确认本题并下一位", "Confirm & next student"],
+    undoQuestion: ["撤销本题确认", "Undo question approval"],
+    nextUnreviewed: ["下一位待复核", "Next unreviewed"],
+    questionQueue: ["本题学生列表", "Students for this question"],
+    flaggedOnly: ["重点核对", "Flagged answers"],
+    questionQueueHelp: [
+      "列表仅包含按当前标准完成初评的试卷。其余试卷请先批改或重新批改。",
+      "Only completed AI drafts using the current rubric are listed. Grade or regrade other papers first.",
+    ],
+    noQuestionResults: [
+      "暂无可按题复核的结果，请先完成初评。",
+      "No eligible results yet. Generate AI drafts first.",
+    ],
+    noQuestionMatches: [
+      "当前筛选下没有学生，请切换筛选或题目。",
+      "No students match. Change the filter or question.",
+    ],
+    questionFinished: [
+      "当前列表的本题复核已完成",
+      "This question is reviewed for everyone in this list",
+    ],
+    reviewUnavailable: [
+      "当前结果无法复核，请先完成批改并确认评分标准未过期。",
+      "This result cannot be reviewed yet. Complete grading and ensure the rubric is current.",
+    ],
+    allQuestionApproved: [
+      "所有题目已复核，整卷成绩已确认",
+      "All questions reviewed. The paper is now approved.",
+    ],
     brand: ["阅卷有方", "GradeFlow"],
     tagline: [
       "教师的 AI 批改工作台",
@@ -294,12 +393,12 @@
       "3. Run a first pass: connect a vision API and select Grade pending. Stop the queue or retry failures when needed.",
     ],
     guide4: [
-      "4. 教师复核：对照原卷，修改分数与评语，确认后才纳入正式成绩和统计。",
-      "4. Review: compare with the original paper, edit scores and feedback, then approve for official exports and statistics.",
+      "4. 教师复核：按学生核对整卷，或点击「按题复核」固定一道题、连续切换学生。常用评语可一键追加；每道题确认后，整卷才纳入正式成绩。修改分数或评语后需要重新确认该题。",
+      "4. Review: check a whole paper by student, or select By question to keep one question in focus across students. Append reusable feedback from your Comment bank. Every question must be reviewed for official grades; score or feedback edits require renewed confirmation.",
     ],
     guide5: [
-      "5. 保存成果：导出成绩 CSV、打印每生反馈，或备份整个工作区以便继续。",
-      "5. Keep your work: export a gradebook CSV, print individual feedback or back up your workspace to continue later.",
+      "5. 保存成果：导出成绩 CSV、打印每生反馈，或备份整个工作区。自定义评语库、收藏和逐题复核进度会一同保存。",
+      "5. Keep your work: export a gradebook CSV, print individual feedback or back up the workspace, including your comment bank, favorites and question review progress.",
     ],
     guideLimits: [
       "目前不包含自动分割混合学生扫描件、LMS 同步或多人协同。每份 PDF 请只包含一位学生。",

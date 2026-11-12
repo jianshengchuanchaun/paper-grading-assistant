@@ -100,6 +100,8 @@
               : "",
         adjusted: false,
         note: "",
+        reviewed: false,
+        reviewedAt: "",
       };
     });
     return {
@@ -135,6 +137,83 @@
     if (/^[\s\uFEFF]*[=+\-@＝＋－＠]/u.test(str) || /^[\t\r\n]/.test(str))
       str = "'" + str;
     return '"' + str.replace(/"/g, '""') + '"';
+  }
+  function validateCommentBank(bank) {
+    if (!Array.isArray(bank) || bank.length > 200) fail("invalidComments");
+    const ids = new Set();
+    return bank.map((entry) => {
+      if (
+        !entry ||
+        typeof entry.id !== "string" ||
+        !entry.id ||
+        entry.id.length > 100 ||
+        ids.has(entry.id)
+      )
+        fail("invalidComments");
+      if (!["strength", "improve", "nextStep"].includes(entry.category))
+        fail("invalidComments");
+      for (const language of ["zh", "en"]) {
+        if (typeof entry[language] !== "string" || entry[language].length > 600)
+          fail("invalidComments");
+      }
+      const zh = entry.zh.trim(),
+        en = entry.en.trim();
+      if (!zh && !en) fail("invalidComments");
+      ids.add(entry.id);
+      return {
+        id: entry.id,
+        category: entry.category,
+        zh,
+        en,
+        favorite: entry.favorite === true,
+      };
+    });
+  }
+  function commentText(entry, language) {
+    return (
+      entry[language === "en" ? "en" : "zh"] ||
+      entry[language === "en" ? "zh" : "en"]
+    );
+  }
+  function appendComment(note, addition) {
+    const current = String(note || "").trim(),
+      value = String(addition || "").trim();
+    if (!value || `\n${current}\n`.includes(`\n${value}\n`)) return current;
+    const next = current ? current + "\n" + value : value;
+    if (next.length > 3000) fail("noteTooLong");
+    return next;
+  }
+  function reviewCandidates(students, rubric, strictness, no) {
+    return students.filter(
+      (s) =>
+        s.status === "done" &&
+        s.result &&
+        !stale(s, rubric, strictness) &&
+        s.result.items.some((q) => q.no === no),
+    );
+  }
+  function setQuestionReviewed(s, no, rubric, strictness, reviewed = true) {
+    const item = s.result?.items.find((q) => q.no === no);
+    if (!item || s.status !== "done" || stale(s, rubric, strictness))
+      fail("reviewUnavailable");
+    if (
+      reviewed &&
+      (!number(item.score) || item.score < 0 || item.score > item.max)
+    )
+      fail("incomplete");
+    item.reviewed = reviewed;
+    item.reviewedAt = reviewed ? new Date().toISOString() : "";
+    s.approved =
+      totals(s).complete && s.result.items.every((q) => q.reviewed === true);
+    return s.approved;
+  }
+  function invalidateQuestion(s, no) {
+    const item = s.result?.items.find((q) => q.no === no);
+    if (item) {
+      item.reviewed = false;
+      item.reviewedAt = "";
+    }
+    s.approved = false;
   }
   function csv(rows) {
     return (
@@ -230,6 +309,15 @@
                 : null;
             item.adjusted = original.adjusted === true;
             item.note = text(original.note, 3000);
+            item.needsReview =
+              item.needsReview || original.needsReview === true;
+            item.reviewed =
+              number(item.score) &&
+              (original.reviewed === true ||
+                (original.reviewed === undefined && s.approved === true));
+            item.reviewedAt = item.reviewed
+              ? text(original.reviewedAt, 100)
+              : "";
             item.reviewReason = [
               "missingQuestion",
               "unreadable",
@@ -247,18 +335,20 @@
         result,
         status: result ? "done" : "idle",
         approved:
-          s.approved === true && !!result && totals({ result }).complete,
+          s.approved === true &&
+          !!result &&
+          totals({ result }).complete &&
+          result.items.every((q) => q.reviewed) &&
+          !stale({ result }, rubric, strictness),
         error: "",
         audit: Array.isArray(s.audit)
-          ? s.audit
-              .slice(-200)
-              .map((a) => ({
-                at: text(a.at, 100),
-                action: text(a.action, 100),
-                no: text(a.no, 30),
-                from: number(a.from) ? a.from : null,
-                to: number(a.to) ? a.to : null,
-              }))
+          ? s.audit.slice(-200).map((a) => ({
+              at: text(a.at, 100),
+              action: text(a.action, 100),
+              no: text(a.no, 30),
+              from: number(a.from) ? a.from : null,
+              to: number(a.to) ? a.to : null,
+            }))
           : [],
       };
     });
@@ -281,6 +371,12 @@
     csv,
     buildMessages,
     validateBackup,
+    validateCommentBank,
+    commentText,
+    appendComment,
+    reviewCandidates,
+    setQuestionReviewed,
+    invalidateQuestion,
     round,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;

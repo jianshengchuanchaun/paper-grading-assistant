@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.0 — 2026-11-12
+
+- Added a bilingual reusable comment library with nine editable starters, categories, search, favorites, and local CRUD.
+- Added per-question comment insertion that preserves existing feedback and avoids duplicate whole comments. Template changes do not modify previously applied feedback.
+- Added a fixed-question review mode with a student roster, pending/flagged filters, progress counts, keyboard navigation and confirm-and-next controls.
+- Track teacher confirmation per question. All scored questions must be reviewed to approve the paper; edits invalidate the affected question and whole-paper approval.
+- Preserve comment banks and review progress in local storage and JSON backups; migrate v2.0 approvals and retain the current bank when importing older backups.
+- Updated Chinese/English interfaces, help, documentation, desktop/mobile layouts and regression coverage.
+
 ## 2.0.0 — 2026-11-12
 
 - Replaced the single-file prototype interface with a responsive bilingual teaching workspace.

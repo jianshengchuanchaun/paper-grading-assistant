@@ -1,25 +1,29 @@
-# GradeFlow v2.0.0 · 阅卷有方
+# GradeFlow v2.1.0 · 阅卷有方
 
-中文与英文共用一个仓库的试卷批改工作台。重新设计教师工作流程，加入多页 PDF、评分模板、原卷并排复核、本地恢复和经过确认的成绩导出。
+Reusable bilingual feedback and question-by-question review, in the same Chinese/English repository.
 
 ## 中文
 
-- 完整中文 / 英文入口与说明文档。
-- 图片和多页 PDF、本地保存、工作区 JSON 备份恢复。
-- 教师控制题号与满分，AI 只提供初评，缺题和无法辨认的答案需要复核。
-- 原卷与评分并排、教师改分、个别评语和修改记录。
-- 正式成绩 CSV、个人打印反馈、班级分布和逐题得分率。
-- 可选本地中转；API 密钥不写入工作区备份。
-- 16 项核心 / 中转测试、6 项浏览器流程测试通过。真实模型批改准确率尚未评测。
+- **常用评语库**：内置 9 条可编辑中英评语，按表扬、待改进、学习建议分类；支持自定义、搜索、收藏、编辑和删除。
+- **一键追加评语**：按当前界面语言追加到某一道题，保留原有反馈并防止重复插入。修改模板不会改动已经给学生的反馈。
+- **按题批改不同学生**：固定题号，使用学生列表或方向键连续切换；支持待复核 / 重点核对筛选、逐题进度和「确认本题并下一位」。
+- **逐题确认**：所有题目有得分且经过教师复核，整卷才确认为正式成绩。修改分数或评语时，仅撤销该题的确认及整卷审批，保留其他题目的进度。
+- **保存与兼容**：评语、收藏、逐题进度纳入本机保存和 JSON 备份。兼容 v2.0 数据，旧备份缺少评语库时保留当前库。
+- 中英文界面、说明文档、使用指南和手机布局同步更新。新增功能不额外调用 AI。
+
+在线体验：[中文版](https://jianshengchuanchaun.github.io/paper-grading-assistant/zh/) · [English](https://jianshengchuanchaun.github.io/paper-grading-assistant/en/)。点击「体验示例」，即可测试新功能。
 
 ## English
 
-- Bilingual entry points and documentation in one repository.
-- Images and multi-page PDFs, local persistence, and complete workspace backups.
-- Teacher-owned rubric IDs and maxima; AI drafts require human review.
-- Side-by-side paper review, teacher scores, individual feedback and edit history.
-- Approved-grade CSV export, printable feedback, class distribution and question performance.
-- Optional local relay; API keys are excluded from saved workspaces and backups.
-- 16 core/relay tests and 6 browser workflow tests passed. Real model grading accuracy has not been evaluated.
+- **Comment bank:** nine editable bilingual starters, custom entries, categories, search, favorites and CRUD.
+- **Append feedback:** insert the current language into one question without replacing existing notes or repeating the same comment. Template edits never change previously applied feedback.
+- **Review by question:** keep one question fixed across students, navigate with the roster or arrow keys, filter pending/flagged answers, track progress and confirm the current question before moving to the next unreviewed student.
+- **Question-level confirmation:** a complete paper is approved only after every question is reviewed. Score/feedback edits revoke the affected question and paper approval while preserving other question confirmations.
+- **Persistence and compatibility:** save comments, favorites and question progress locally and in JSON backups. v2.0 workspaces migrate, and older backups without a bank preserve the current library.
+- Updated Chinese/English interfaces, guides, README files and mobile layouts. The new features make no additional AI calls.
 
-The static ZIP contains the complete browser app and bundled PDF.js. Extract and open `index.html` for the basic demo; use HTTP/HTTPS for PDF imports. The source ZIP includes the local server, tests, documentation and build scripts; run `npm ci`, `npm run build`, then `npm start`.
+## Validation and downloads
+
+22 Node tests and 9 Edge browser workflows passed. JavaScript syntax, static build, desktop/mobile layouts, old-data migration and backup round-trips were verified. This release tests the workflow, not real-model grading accuracy; no paid AI provider or teacher-marked benchmark was used.
+
+The static ZIP contains the full browser app and bundled PDF.js. Use HTTP/HTTPS for PDF imports. The source ZIP includes the server, tests and documentation; run `npm ci`, `npm run build`, then `npm start`. The repository's `gh-pages` branch serves both language entries.

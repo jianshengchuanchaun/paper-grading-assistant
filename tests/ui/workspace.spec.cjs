@@ -104,16 +104,14 @@ test("new batch, upload image, configure and mock real provider, CSV and secret 
   await page.locator("#batch-title").fill("Quiz");
   await page.locator("#batch-class").fill("3B");
   await page.locator('#new-batch-form button[type="submit"]').click();
-  await page
-    .locator("#papers-input")
-    .setInputFiles({
-      name: "=FORMULA.png",
-      mimeType: "image/png",
-      buffer: Buffer.from(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aKX8AAAAASUVORK5CYII=",
-        "base64",
-      ),
-    });
+  await page.locator("#papers-input").setInputFiles({
+    name: "=FORMULA.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aKX8AAAAASUVORK5CYII=",
+      "base64",
+    ),
+  });
   await expect(page.locator("tbody tr")).toHaveCount(1);
   await nav(page, "settings");
   await page.locator("#provider").selectOption("custom");
@@ -185,13 +183,11 @@ test("multi-page PDF renders locally and malformed backup cannot replace workspa
   const pdf = await pdfPage.pdf({ format: "A4" });
   await pdfPage.close();
   await page.goto("/?lang=en");
-  await page
-    .locator("#papers-input")
-    .setInputFiles({
-      name: "student.pdf",
-      mimeType: "application/pdf",
-      buffer: pdf,
-    });
+  await page.locator("#papers-input").setInputFiles({
+    name: "student.pdf",
+    mimeType: "application/pdf",
+    buffer: pdf,
+  });
   await expect(page.locator("tbody tr")).toHaveCount(1);
   await expect(page.locator(".paper-cell")).toContainText("2 pages");
   await click(page, "review");
@@ -199,13 +195,11 @@ test("multi-page PDF renders locally and malformed backup cannot replace workspa
   await page.locator(".page-thumb").nth(1).click();
   await expect(page.locator(".page-thumb").nth(1)).toHaveClass(/active/);
   await click(page, "close");
-  await page
-    .locator("#backup-input")
-    .setInputFiles({
-      name: "broken.json",
-      mimeType: "application/json",
-      buffer: Buffer.from('{"version":2}'),
-    });
+  await page.locator("#backup-input").setInputFiles({
+    name: "broken.json",
+    mimeType: "application/json",
+    buffer: Buffer.from('{"version":2}'),
+  });
   await expect(page.locator("#toast")).toContainText("Invalid");
   await expect(page.locator("tbody tr")).toHaveCount(1);
 });
@@ -229,13 +223,11 @@ test("valid backup restores work, and teacher comment revokes an approval", asyn
   await page.locator("#batch-title").fill("Empty");
   await page.locator('#new-batch-form button[type="submit"]').click();
   await expect(page.locator("tbody tr")).toHaveCount(0);
-  await page
-    .locator("#backup-input")
-    .setInputFiles({
-      name: "backup.json",
-      mimeType: "application/json",
-      buffer: Buffer.from(content),
-    });
+  await page.locator("#backup-input").setInputFiles({
+    name: "backup.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(content),
+  });
   await expect(page.locator("tbody tr")).toHaveCount(4);
   await expect(page.locator(".badge.approved")).toHaveCount(2);
   await page
