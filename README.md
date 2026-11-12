@@ -4,6 +4,8 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md) · [Research & roadmap](docs/research.md)
 
+**[Open in English](https://jianshengchuanchaun.github.io/paper-grading-assistant/en/)** · **[打开中文版](https://jianshengchuanchaun.github.io/paper-grading-assistant/zh/)** · [Downloads](https://github.com/jianshengchuanchaun/paper-grading-assistant/releases)
+
 ![GradeFlow English workspace](docs/workspace-en.png)
 
 Upload a student's paper, apply your own rubric, review the suggested marks alongside the original, and export the grades you have approved. GradeFlow is a browser-based assistant for teachers, with Chinese and English interfaces from one shared codebase.

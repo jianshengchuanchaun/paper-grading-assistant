@@ -9,6 +9,7 @@ Date: 2026-11-12 · Version: 2.0.0
 - 6 Edge browser workflow tests passed: Chinese and English UI, teacher edits and approval, refresh persistence, rubric invalidation, queue skipping, image import, mocked provider responses, CSV export, exclusion of keys from backups, local two-page PDF rendering, invalid backup rejection, valid backup restoration and teacher-feedback approval invalidation.
 - Desktop review actions are asserted visible within the viewport. A 390-pixel viewport is checked for page-level horizontal overflow.
 - Desktop Chinese, desktop English, review and mobile screenshots were inspected during implementation.
+- GitHub Pages built successfully from the `gh-pages` branch. Chinese/English entry points and bundled PDF resources are checked after deployment.
 
 ## What these checks do not prove
 

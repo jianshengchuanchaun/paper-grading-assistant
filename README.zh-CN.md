@@ -4,6 +4,8 @@
 
 [简体中文](README.zh-CN.md) · [English](README.md) · [调研与路线图](docs/research.md)
 
+**[在线打开中文版](https://jianshengchuanchaun.github.io/paper-grading-assistant/zh/)** · **[Open in English](https://jianshengchuanchaun.github.io/paper-grading-assistant/en/)** · [下载发布版](https://github.com/jianshengchuanchaun/paper-grading-assistant/releases)
+
 ![中文版工作台](docs/workspace-zh.png)
 
 从老师已有的试卷批改原型出发，重新设计了界面和批改流程：先定标准，再上传试卷，AI 辅助初评，教师逐题复核，最后导出经过确认的成绩。同一套代码提供中文和英文两个入口。
