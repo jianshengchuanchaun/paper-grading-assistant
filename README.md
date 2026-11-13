@@ -12,6 +12,8 @@ Upload a student's paper, apply your own rubric, review the suggested marks alon
 
 ## What works today
 
+- **A refreshed teaching desk:** shadcn-admin navigation and cards, a collapsible desktop sidebar, mobile navigation drawer and keyboard-friendly quick search (Ctrl+K / Command+K). Magic UI adds subtle statistic transitions and a static dotted rubric background; reduced-motion preferences are respected.
+
 - **Classes and assessment history:** keep separate papers, rubrics, grades and review progress for each assessment. Create/rename classes, move assessments, search, archive/unarchive and resume work without replacing previous records.
 - **Teacher-controlled rubrics:** explicit question IDs, maximum points, scoring criteria, reusable templates, and additional instructions.
 - **Images and PDFs:** JPG, PNG, WebP, multi-page PDF, drag and drop, and image paste inside a student's review. PDF pages render locally using bundled PDF.js.
@@ -47,7 +49,9 @@ For a real class:
 5. Review the original and suggested marks. Use **By student** to approve a whole paper, or **By question** to confirm individual questions across students. Add feedback from your **Comment bank** as needed.
 6. Export official grades, print individual feedback, or back up the workspace.
 
-You can open `index.html` directly for the demo and basic image workflow. PDF module loading and the local relay require HTTP/HTTPS. Browser storage and direct API calls may also be restricted for `file://` pages; the local server or a static HTTPS host is recommended.
+After `npm run build`, you can open `index.html` directly for the demo and basic image workflow; the source checkout needs this build to generate the React UI bundle. The release's static ZIP already includes it. PDF module loading and the local relay require HTTP/HTTPS. Browser storage and direct API calls may also be restricted for `file://` pages; the local server or a static HTTPS host is recommended.
+
+Use the top-left navigation toggle to make more room for papers. On phones it opens the navigation drawer. **Quick search** finds tools such as Rubrics, Comment bank and AI settings, and offers New batch / Import papers shortcuts. Arrow keys select, Enter opens and Escape closes. See [frontend integration](docs/UI_INTEGRATION.md) and [third-party credits](THIRD_PARTY_NOTICES.md) for the actual components, build commands and licenses.
 
 ## Two ways to make review easier
 

@@ -11,6 +11,13 @@ await cp(path.join(root, "assets"), path.join(dist, "assets"), {
 const html = await readFile(path.join(root, "index.html"), "utf8");
 await writeFile(path.join(dist, "index.html"), html);
 await cp(path.join(root, "LICENSE"), path.join(dist, "LICENSE"));
+await cp(path.join(root, "LICENSES"), path.join(dist, "LICENSES"), {
+  recursive: true,
+});
+await cp(
+  path.join(root, "THIRD_PARTY_NOTICES.md"),
+  path.join(dist, "THIRD_PARTY_NOTICES.md"),
+);
 for (const lang of ["zh", "en"]) {
   await mkdir(path.join(dist, lang), { recursive: true });
   await mkdir(path.join(root, lang), { recursive: true });

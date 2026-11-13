@@ -111,7 +111,7 @@ small,
   display: grid;
   gap: 20px;
 }
-.hidden {
+.workspace-content .hidden {
   display: none !important;
 }
 .loading {

@@ -1,6 +1,8 @@
-# GradeFlow v2.2: a six-minute product walkthrough
+# GradeFlow v2.3: a six-minute product walkthrough
 
 Use the [English entry](https://jianshengchuanchaun.github.io/paper-grading-assistant/en/). Record in a dedicated browser profile with fictional data. **Try a demo** creates a separate assessment and never calls an AI service.
+
+Optional 15-second interface introduction: show the shadcn-admin navigation/cards and Magic UI statistic transitions, collapse and expand the sidebar, then press Ctrl+K (Command+K on macOS), search for Comment bank and press Enter. On a phone, the top-left toggle opens a navigation drawer. Statistics respect reduced-motion preferences; no grading accuracy is implied by the animation.
 
 | Time | Show | Explain |
 | --- | --- | --- |

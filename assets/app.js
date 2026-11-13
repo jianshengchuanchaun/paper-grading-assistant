@@ -593,25 +593,20 @@
     document.documentElement.lang = lang === "en" ? "en" : "zh-CN";
     document.title = `${t("brand")} · ${t(view)}`;
     const n = counts();
-    $("#app").innerHTML = `<aside class="sidebar">
-      <a class="brand" href="#" data-action="view" data-view="workspace"><img src="${assetURL("assets/favicon.svg")}" alt=""><div><strong>${esc(t("brand"))}</strong><small>${lang === "en" ? "TEACHER WORKSPACE" : "GRADEFLOW"}</small></div></a>
-      <button class="workspace-select" data-action="view" data-view="library"><span class="avatar">${icon("book")}</span><div><div class="small">${esc(w.className || t("defaultClass"))}</div><small class="muted">${esc(t("switchBatch"))}</small></div></button>
-      <div class="nav-caption">${t("tools")}</div>
-      <nav aria-label="${esc(t("tools"))}">${[
-        ["workspace", "grid"],
-        ["library", "clock"],
-        ["rubrics", "book"],
-        ["comments", "edit"],
-        ["insights", "chart"],
-        ["settings", "settings"],
-      ]
-        .map(
-          ([key, ico]) =>
-            `<button class="nav-item ${view === key ? "active" : ""}" data-action="view" data-view="${key}" ${view === key ? 'aria-current="page"' : ""}>${icon(ico)}${t(key)}${key === "workspace" && n.total ? `<span class="nav-count">${n.total}</span>` : ""}</button>`,
-        )
-        .join("")}</nav>
-      <div class="sidebar-bottom"><button class="nav-item" data-action="view" data-view="help">${icon("help")}${t("help")}</button><button class="nav-item" data-action="backup">${icon("download")}${t("backup")}</button><button class="nav-item" data-action="restore">${icon("upload")}${t("restore")}</button><div class="local-card"><div class="row">${icon("shield")}<strong>${t("localFirst")}</strong></div><p>${t("localNote")}</p></div><div class="side-footer">GRADEFLOW · v2.2.1</div></div>
-    </aside><div class="shell"><header class="topbar"><div class="breadcrumb">${icon("book")}<span>${t("myWorkspace")}</span><span>/</span><b>${t(view)}</b></div><div class="top-actions"><span class="save-state" id="save-state"></span><button class="language" data-action="language">${t("language")}</button><span class="avatar">${lang === "en" ? "T" : "师"}</span></div></header><main id="main" class="main" tabindex="-1">${!storageReady ? `<div class="notice error">${t(saveState)} ${button("reload-app", t("reloadApp"), "rotate", "sm")}</div>` : ""}${view === "workspace" ? workspaceHTML() : view === "library" ? libraryHTML() : view === "rubrics" ? rubricsHTML() : view === "comments" ? commentsHTML() : view === "insights" ? insightsHTML() : view === "settings" ? settingsHTML() : helpHTML()}<footer class="page-footer">${t("tagline")} &nbsp;·&nbsp; GradeFlow</footer></main></div>`;
+    window.GradeUI.render({
+      lang,
+      view,
+      className: w.className || t("defaultClass"),
+      total: n.total,
+      busy,
+      logo: assetURL("assets/favicon.svg"),
+      html: `${!storageReady ? `<div class="notice error">${t(saveState)} ${button("reload-app", t("reloadApp"), "rotate", "sm")}</div>` : ""}${view === "workspace" ? workspaceHTML() : view === "library" ? libraryHTML() : view === "rubrics" ? rubricsHTML() : view === "comments" ? commentsHTML() : view === "insights" ? insightsHTML() : view === "settings" ? settingsHTML() : helpHTML()}<footer class="page-footer">${t("tagline")} &nbsp;·&nbsp; GradeFlow</footer>`,
+      onAction(action, data = {}) {
+        const element = document.createElement("button");
+        Object.assign(element.dataset, data, { action });
+        handleAction(element);
+      },
+    });
     updateSave();
     if (view === "settings") {
       $("#api-key").value = apiKey;
@@ -622,10 +617,10 @@
     }
   }
   function heading(title, subtitle, actions = "") {
-    return `<div class="page-heading"><div><div class="eyebrow">${view === "workspace" ? "A LITTLE LESS MARKING, A LOT MORE TEACHING" : "GRADEFLOW / " + view.toUpperCase()}</div><h1>${esc(title)}</h1><p>${esc(subtitle)}</p></div>${actions ? `<div class="row wrap">${actions}</div>` : ""}</div>`;
+    return `<div class="page-heading"><div><div class="eyebrow">${view === "workspace" ? t("teachingDesk") : "GRADEFLOW / " + view.toUpperCase()}</div><h1>${esc(title)}</h1><p>${esc(subtitle)}</p></div>${actions ? `<div class="row wrap">${actions}</div>` : ""}</div>`;
   }
-  function metric(label, value, foot, ico, cls = "") {
-    return `<div class="metric ${cls}"><div class="label">${t(label)}</div><div class="metric-icon">${icon(ico)}</div><div class="value">${value}</div><div class="foot">${esc(foot)}</div></div>`;
+  function metric(label, value, foot, ico, cls = "", suffix = "") {
+    return `<div data-ui-metric data-metric-key="${view}-${label}" data-label="${esc(t(label))}" data-value="${esc(value)}" data-suffix="${esc(suffix)}" data-foot="${esc(foot)}" data-icon="${esc(ico)}" data-tone="${esc(cls)}"></div>`;
   }
   function workspaceHTML() {
     const n = counts();
@@ -633,6 +628,13 @@
       w.rubric.questions.reduce((a, q) => a + (Number(q.max) || 0), 0),
     );
     const progress = n.total ? Math.round((n.approved / n.total) * 100) : 0;
+    const currentStep = !rubricValid()
+      ? 0
+      : !n.total
+        ? 1
+        : n.approved === n.total
+          ? 3
+          : 2;
     return (
       heading(
         t("welcome"),
@@ -647,9 +649,9 @@
           ),
       ) +
       `${w.demo ? `<div class="notice">${icon("spark")}${t("demoBanner")}</div>` : ""}
-      <div class="workflow">${["step1", "step2", "step3", "step4"].map((key, i) => `${i ? '<span class="workflow-line"></span>' : ""}<div class="workflow-step ${(i === 0 && rubricValid()) || (i === 1 && n.total) ? "complete" : ""} ${i === (n.approved ? 3 : n.total ? 2 : rubricValid() ? 1 : 0) ? "current" : ""}"><span>${(i === 0 && rubricValid()) || (i === 1 && n.total) ? "✓" : i + 1}</span>${t(key)}</div>`).join("")}</div>
+      <div class="workflow">${["step1", "step2", "step3", "step4"].map((key, i) => `${i ? '<span class="workflow-line"></span>' : ""}<div class="workflow-step ${i < currentStep ? "complete" : ""} ${i === currentStep ? "current" : ""}" ${i === currentStep ? 'aria-current="step"' : ""}><span>${i < currentStep ? "✓" : i + 1}</span>${t(key)}</div>`).join("")}</div>
       ${batchContextHTML()}<div class="metrics">${metric("totalPapers", n.total, w.className || t("defaultClass"), "file")}${metric("graded", n.graded, t("draftLabel"), "spark")}${metric("reviewQueue", n.review, t("resultIntro"), "clock", "amber")}${metric("approved", n.approved, t("localNote"), "circleCheck", "green")}</div>
-      <div class="overview-row"><section class="rubric-callout"><div><h2>${t("rubricCard")}</h2><p>${t("rubricCardText")}</p><button class="text-button" data-action="view" data-view="rubrics">${t("editRubric")}${icon("arrow")}</button></div><div class="illustration" aria-hidden="true"><div class="mini-paper back"></div><div class="mini-paper"><i></i><i></i><i></i><i></i><span class="check">✓</span></div></div></section><section class="progress-card"><div class="progress-ring" style="--progress:${progress}%"><strong>${progress}<small>%</small></strong></div><div><h3>${t("batchProgress")}</h3><p>${n.approved} / ${n.total} &nbsp;${t("confirmed")}</p><button class="text-button" data-action="filter" data-filter="review">${t("reviewQueue")}${icon("arrow")}</button></div></section></div>
+      <div class="overview-row"><section class="rubric-callout"><div data-ui-pattern aria-hidden="true"></div><div class="rubric-callout-copy"><h2>${t("rubricCard")}</h2><p>${t("rubricCardText")}</p><button class="text-button" data-action="view" data-view="rubrics">${t("editRubric")}${icon("arrow")}</button></div><div class="illustration" aria-hidden="true"><div class="mini-paper back"></div><div class="mini-paper"><i></i><i></i><i></i><i></i><span class="check">✓</span></div></div></section><section class="progress-card"><div class="progress-ring" style="--progress:${progress}%"><strong>${progress}<small>%</small></strong></div><div><h3>${t("batchProgress")}</h3><p>${n.approved} / ${n.total} &nbsp;${t("confirmed")}</p><button class="text-button" data-action="filter" data-filter="review">${t("reviewQueue")}${icon("arrow")}</button></div></section></div>
       <section aria-labelledby="submissions-heading"><div class="section-header"><div><h2 id="submissions-heading">${esc(w.title || t("batchTitle"))}<span class="count">${n.total}</span></h2><p>${rubricValid() ? `${esc(w.rubric.title || t("rubricReady"))} · ${w.rubric.questions.length} ${t("questions")} · ${totalMax} ${t("points")}` : t("batchSubtitle")}</p></div><div class="row wrap">${button("review-by-question", t("byQuestion"), "book", "soft", n.graded ? "" : "disabled")}${button("export", t("export"), "download", "", n.graded ? "" : "disabled")}${button("add-student", t("newStudent"), "plus", "", busy ? "disabled" : "")}${button(batch ? "stop" : "grade-pending", t(batch ? "stop" : "gradePending"), batch ? "stop" : "spark", "primary", !batch && busy ? "disabled" : "")}</div></div>
       ${batch ? `<div class="batch-banner"><span>${t("grading")} ${batch.done} / ${batch.total}</span><progress value="${batch.done}" max="${batch.total}"></progress><span>${esc(batch.current || "")}</span></div>` : ""}
       <div class="table-card"><div class="table-toolbar"><div class="tabs" role="group" aria-label="${t("status")}">${["all", "pending", "review", "confirmed", "failed"].map((k) => `<button class="tab ${filter === k ? "active" : ""}" data-action="filter" data-filter="${k}" aria-pressed="${filter === k}">${t(k)}</button>`).join("")}</div><label class="search">${icon("search")}<input type="search" id="search" aria-label="${t("search")}" placeholder="${t("search")}" value="${esc(search)}"></label></div><div id="student-table">${tableHTML()}</div><div class="table-footer"><span>${n.total} ${t("totalPapers")} &nbsp;·&nbsp; ${t("localFirst")}</span><span>${t("resultIntro")}</span></div></div>
@@ -742,7 +744,7 @@
         ),
       ) +
       (list.length
-        ? `<div class="metrics">${metric("approved", list.length, t("basedOn"), "circleCheck", "green")}${metric("average", `${avg}<small>%</small>`, w.title || t("defaultTitle"), "chart")}${metric("passRate", `${pass}<small>%</small>`, t("passNote"), "check")}${metric("reviewQueue", counts().review, t("resultIntro"), "clock", "amber")}</div><div class="chart-grid"><div class="panel"><h2>${t("distribution")}</h2><div class="histogram" role="img" aria-label="${esc(distribution.map((n, i) => `${["0–59", "60–69", "70–79", "80–89", "90–100"][i]}%: ${n}`).join(", "))}">${distribution.map((n, i) => `<div class="col"><strong>${n}</strong><div class="bar" style="height:${(n / Math.max(...distribution, 1)) * 145}px"></div><small>${["0–59", "60–69", "70–79", "80–89", "90–100"][i]}%</small></div>`).join("")}</div></div><div class="panel"><h2>${t("questionAnalysis")}</h2>${questionRates.map((q) => `<div class="question-bar"><span>Q${esc(q.no)}</span><div class="bar-track"><i class="${q.rate < 60 ? "low" : ""}" style="width:${q.rate}%"></i></div><span>${q.rate}%</span></div>`).join("")}</div></div><section class="panel" style="margin-top:20px"><h2>${t("teachingFocus")}</h2><div class="focus-list">${
+        ? `<div class="metrics">${metric("approved", list.length, t("basedOn"), "circleCheck", "green")}${metric("average", avg, w.title || t("defaultTitle"), "chart", "", "%")}${metric("passRate", pass, t("passNote"), "check", "", "%")}${metric("reviewQueue", counts().review, t("resultIntro"), "clock", "amber")}</div><div class="chart-grid"><div class="panel"><h2>${t("distribution")}</h2><div class="histogram" role="img" aria-label="${esc(distribution.map((n, i) => `${["0–59", "60–69", "70–79", "80–89", "90–100"][i]}%: ${n}`).join(", "))}">${distribution.map((n, i) => `<div class="col"><strong>${n}</strong><div class="bar" style="height:${(n / Math.max(...distribution, 1)) * 145}px"></div><small>${["0–59", "60–69", "70–79", "80–89", "90–100"][i]}%</small></div>`).join("")}</div></div><div class="panel"><h2>${t("questionAnalysis")}</h2>${questionRates.map((q) => `<div class="question-bar"><span>Q${esc(q.no)}</span><div class="bar-track"><i class="${q.rate < 60 ? "low" : ""}" style="width:${q.rate}%"></i></div><span>${q.rate}%</span></div>`).join("")}</div></div><section class="panel" style="margin-top:20px"><h2>${t("teachingFocus")}</h2><div class="focus-list">${
             questionRates
               .filter((q) => q.rate < 80)
               .sort((a, b) => a.rate - b.rate)

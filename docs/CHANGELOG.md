@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.3.0 — 2026-11-13
+
+- Integrated React, Vite, Tailwind and shadcn/ui; adapted shadcn-admin sidebar/command-menu patterns and its Card component while preserving the existing grading and local-storage engine.
+- Added a collapsible desktop sidebar with saved preference, localized mobile navigation drawer, and Ctrl+K / Command+K quick search with keyboard navigation and focus restoration.
+- Integrated Magic UI Number Ticker statistics and a static Dot Pattern rubric card. Reduced-motion preferences show final values immediately; forms and review scores remain stable.
+- Refined Chinese/English typography, colors, spacing, cards, tables, model settings and responsive layouts. Keep the workflow on review until all papers are approved.
+- Added tests for the new shell interactions and demo network independence. Updated screenshots, bilingual documentation and recording guides, with upstream source/license notices included in source and static packages.
+
 ## 2.2.1 — 2026-11-13
 
 - Added the DeepSeek browser-connection preset in both languages, with the official base URL and image-capable `deepseek-flash` model prefilled.

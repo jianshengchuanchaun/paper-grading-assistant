@@ -1,31 +1,30 @@
-# GradeFlow v2.2.1 · 阅卷有方
+# GradeFlow v2.3.0 · 阅卷有方
 
-DeepSeek browser connection, available in Chinese and English.
+A refreshed teaching workspace with shadcn-admin and Magic UI.
 
 ## 中文
 
-- 「模型设置 → 浏览器直连」新增 **DeepSeek**，自动填入官方地址 `https://api.deepseek.com` 和支持图片输入的 `deepseek-flash`。
-- 添加中英文接入提示和官方视觉接口文档链接。输入自己的 API 密钥后，可先测试文本连接，再用一份试卷验证批改。
-- DeepSeek 直连请求关闭深度思考，将输出额度留给回复和评分 JSON；其他服务商的请求参数保持原样。
-- 服务商和模型配置可以保存；密钥只留在页面内存，刷新或更换服务商后清除，不进入备份。
-- 更新中英文 README，以及 B 站讲稿中的 DeepSeek 演示步骤。
+- **新版教学后台**：重新整理侧边导航、顶部工具栏、数据卡片、表格、模型设置和班级列表，中英文同步更新。
+- **随手找到功能**：支持 Ctrl+K / Command+K 快捷搜索，方向键选择、回车打开、Esc 关闭并恢复焦点；可以搜索评分标准、评语库、班级与模型设置，也能新建批次、导入试卷。
+- **桌面与手机**：侧边栏可以收起为图标并记住选择，手机使用可关闭的抽屉导航。
+- **Magic UI**：概览统计使用 Number Ticker，绿色评分标准卡片使用 Dot Pattern；尊重减少动态效果设置，原卷复核和实际分数表保持稳定。
+- **已有数据继续使用**：保留班级、历史考试、常用评语、逐题复核、PDF、导出和 DeepSeek 功能，本次不改变本机成绩数据库格式。
+- **开源来源与演示材料**：保留 shadcn-admin、shadcn/ui、Magic UI 与字体许可证；更新 README、截图、B 站口播讲稿和录屏包。
 
-在线使用：[中文版](https://jianshengchuanchaun.github.io/paper-grading-assistant/zh/?v=2.2.1) · [English](https://jianshengchuanchaun.github.io/paper-grading-assistant/en/?v=2.2.1)
-
-[B 站讲稿](https://github.com/jianshengchuanchaun/paper-grading-assistant/blob/main/docs/BILIBILI_SCRIPT.zh-CN.md)
+[中文版](https://jianshengchuanchaun.github.io/paper-grading-assistant/zh/?v=2.3.0) · [English](https://jianshengchuanchaun.github.io/paper-grading-assistant/en/?v=2.3.0) · [B 站讲稿](https://github.com/jianshengchuanchaun/paper-grading-assistant/blob/main/docs/BILIBILI_SCRIPT.zh-CN.md)
 
 ## English
 
-- Added a DeepSeek browser-connection preset with the official base URL and image-capable `deepseek-flash` model prefilled.
-- Added bilingual setup guidance and the official vision documentation link. Test the text connection, then verify grading with one paper.
-- Disable thinking for direct DeepSeek requests to reserve output tokens for replies and grading JSON. Other providers retain their existing request parameters.
-- Preserve provider/model settings while keeping keys in page memory only, clearing them on reload or provider change and excluding them from backups.
-- Updated both READMEs and the Chinese recording walkthrough.
+- Refreshed bilingual navigation, cards, tables, AI settings and class history, using actual shadcn-admin/shadcn UI components and patterns.
+- Added Ctrl+K / Command+K quick search with keyboard navigation and focus restoration, a collapsible desktop sidebar and a mobile navigation drawer.
+- Added Magic UI Number Ticker statistics and a static Dot Pattern rubric card. Reduced-motion preferences are respected; grading tables and paper review remain stable.
+- Preserved the existing class/history, feedback, question-review, PDF, export and DeepSeek workflows without changing the assessment storage schema.
+- Updated documentation, screenshots, recording materials and upstream license notices. See docs/UI_INTEGRATION.md for implementation and build details.
 
-## Validation
+## Installation
 
-Build, syntax checks and 26 Node tests passed. Three targeted Edge workflows passed, covering both DeepSeek language entries and the existing custom provider. Image payloads and grading results were tested with intercepted requests, without real API keys or inference charges. The official endpoint also passed an unauthenticated CORS preflight for the GitHub Pages origin. This does not measure real grading accuracy or validate a paid account.
+TypeScript checks, the static build, 26 Node tests and all 19 Edge browser workflows passed. The three new interface workflows were rerun after the final numeric-rendering correction; mobile drawer layout and stable screenshots were also inspected. No live paid AI inference was used for testing.
 
-Use your own API key; provider charges apply. The connection test sends text only. Keep teacher review in the grading workflow.
+Source ZIP: run `npm ci`, `npm run build`, then `npm start`. The new build generates the React presentation bundle before packaging both language entries. The static ZIP includes the compiled UI, licenses and PDF.js assets and can be served over HTTP/HTTPS. The recording ZIP contains bilingual fictional samples, current screenshots and the updated walkthrough.
 
-The source ZIP includes the app, local server, tests, docs and recording materials. Run `npm ci`, `npm run build`, then `npm start`. Serve the static ZIP over HTTP/HTTPS for PDF support. Local records remain in your browser; back up before moving devices.
+Records remain in your browser. The demo makes no AI calls; real grading uses your configured provider and may incur charges. Teachers review final marks.

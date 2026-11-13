@@ -1,8 +1,18 @@
 # Release validation / 发布验证
 
-Date: 2026-11-13 · Version: 2.2.1
+Date: 2026-11-13 · Version: 2.3.0
 
-## DeepSeek update verification
+## Interface update verification
+
+- TypeScript, JavaScript syntax checks, the Vite UI build and static packaging pass on Node.js 24.14.1 / Windows.
+- All 26 Node tests and the full 19-workflow Edge suite passed. Following a final percentage-rendering correction, the three new interface workflows were rerun successfully, including exact average/pass-rate output. The mobile drawer's final row layout was checked separately in the browser.
+- The 16 established workflows cover bilingual grading, DeepSeek/custom-provider payloads, PDF import, feedback, per-question confirmation, class/assessment CRUD, full backup restoration, additive old-backup import, v2.1 IndexedDB migration, tab conflicts and simulated quota failures.
+- Three new workflows cover command search, empty results, keyboard activation, focus restoration, desktop sidebar persistence, form-draft preservation across shell interactions, bilingual mobile drawer navigation, reduced motion, numeric precision/percentage suffixes and quick actions using existing dialogs. Demo use makes no external network requests.
+- Desktop Chinese/English workspaces, settings, class history, question review, command search, insights and a 390-pixel phone layout were visually inspected. Formal release screenshots use fictional data and stable animation frames.
+- Runtime dependencies passed `npm audit --omit=dev`; no vulnerabilities were reported. Installation-only shadcn CLI dependencies are not kept in the application; the generated components and utility styles are stored locally with licenses.
+- The UI bundle is approximately 514 kB JavaScript / 168 kB gzip and 169 kB CSS including font data / 90 kB gzip. This is a bundle-size observation, not a measured device-performance claim.
+
+## DeepSeek verification from v2.2.1
 
 - Re-ran the build, syntax checks and all 26 Node tests successfully.
 - Three targeted Edge workflows passed: Chinese and English DeepSeek setup, text connection tests, image grading payloads and response handling, preset persistence, cleared keys on reload/provider change, backup secret omission, plus the existing custom-provider workflow. DeepSeek requests use `thinking: { type: "disabled" }`; custom-provider requests omit that option.

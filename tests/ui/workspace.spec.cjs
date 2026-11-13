@@ -209,7 +209,10 @@ test("both standalone language entries load with correct asset paths", async ({
 }) => {
   await page.goto("/en/");
   await expect(page.locator("h1")).toHaveText("More teaching. Less marking.");
-  await expect(page.locator(".brand img")).toHaveJSProperty("naturalWidth", 64);
+  await expect(page.locator(".app-brand img")).toHaveJSProperty(
+    "naturalWidth",
+    64,
+  );
   await page.goto("/zh/");
   await expect(page.locator("h1")).toHaveText("把时间，还给教学。");
 });
