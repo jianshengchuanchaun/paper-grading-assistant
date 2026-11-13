@@ -1,6 +1,6 @@
 {
   "name": "paper-grading-assistant",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "private": true,
   "description": "GradeFlow / 阅卷有方 — a bilingual, teacher-reviewed paper grading workspace",
   "scripts": {

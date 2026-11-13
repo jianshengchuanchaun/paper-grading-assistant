@@ -1,8 +1,17 @@
 # Release validation / 发布验证
 
-Date: 2026-11-13 · Version: 2.2.0
+Date: 2026-11-13 · Version: 2.2.1
 
-## Verified locally
+## DeepSeek update verification
+
+- Re-ran the build, syntax checks and all 26 Node tests successfully.
+- Three targeted Edge workflows passed: Chinese and English DeepSeek setup, text connection tests, image grading payloads and response handling, preset persistence, cleared keys on reload/provider change, backup secret omission, plus the existing custom-provider workflow. DeepSeek requests use `thinking: { type: "disabled" }`; custom-provider requests omit that option.
+- Inspected the Chinese settings screenshot and verified the English guidance in the browser tests.
+- An unauthenticated `OPTIONS` request to the official `/chat/completions` endpoint returned HTTP 200, allowing the GitHub Pages origin, POST, and authorization/content-type headers. This is a CORS preflight check, not an authenticated inference test.
+- Model and payload choices were checked against the official [vision](https://api-docs.deepseek.com/guides/vision/) and [thinking-mode](https://api-docs.deepseek.com/guides/thinking_mode/) documentation on 2026-11-13.
+- The full 14-workflow suite below passed for v2.2.0. This patch re-ran the affected provider flow and added two DeepSeek flows; the complete browser suite was not repeated.
+
+## Baseline verified for v2.2.0
 
 - JavaScript syntax checks and static build succeeded on Node.js 24.14.1 / Windows.
 - 26 Node tests passed, covering scoring, validation, CSV safety, prompt boundaries, localization, feedback and review state, relay restrictions, class catalog identities/references, assessment dates, old-workspace migration, full-library validation and history summaries.

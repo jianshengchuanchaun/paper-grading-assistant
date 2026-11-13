@@ -88,6 +88,8 @@ For a recording walkthrough, see the [English demo guide](docs/DEMO_GUIDE.en.md)
 
 Choose a preset or enter an OpenAI-compatible base URL and a vision model ID. Enter your API key. The key is held **only in page memory** and disappears on reload. It is not stored in IndexedDB or workspace exports.
 
+**DeepSeek**: select **AI settings → Browser connection → DeepSeek** to prefill `https://api.deepseek.com` and `deepseek-flash`. Enter your own DeepSeek API key, save, then test the connection. The connection test sends text only; try one paper next to check image reading and grading. The [official DeepSeek vision guide](https://api-docs.deepseek.com/guides/vision/) documents image support for `deepseek-flash`; verify vision support before changing models. Direct requests using this preset disable thinking so the output budget is available for the connection reply and grading JSON. Provider usage charges apply.
+
 The provider must allow cross-origin browser requests. If it does not, use the local relay. Provider availability, model IDs, image support, pricing and account limits can change; no model is represented as permanently free or universally compatible.
 
 ### Optional local relay

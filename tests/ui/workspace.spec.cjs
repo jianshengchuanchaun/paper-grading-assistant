@@ -125,6 +125,7 @@ test("new batch, upload image, configure and mock real provider, CSV and secret 
     async (route) => {
       calls++;
       const body = route.request().postDataJSON();
+      expect(body.thinking).toBeUndefined();
       expect(body.messages[0].content).toContain("untrusted evidence");
       await route.fulfill({
         json: {

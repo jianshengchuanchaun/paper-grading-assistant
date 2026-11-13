@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.1 — 2026-11-13
+
+- Added the DeepSeek browser-connection preset in both languages, with the official base URL and image-capable `deepseek-flash` model prefilled.
+- Added bilingual setup guidance and a link to the official vision API documentation. DeepSeek direct requests disable thinking to reserve output tokens for the answer and grading JSON.
+- Verified text connection tests, image grading requests, saved presets and memory-only keys with intercepted browser requests in both languages.
+
 ## 2.2.0 — 2026-11-13
 
 - Added class management and saved assessment history: create/rename classes, create/edit/move assessments, search/sort, archive/unarchive, and delete with explicit confirmation.
