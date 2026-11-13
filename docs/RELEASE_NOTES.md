@@ -2,6 +2,8 @@
 
 A refreshed teaching workspace with shadcn-admin and Magic UI.
 
+Recording materials revised on 2026-11-13 (application version unchanged): the recording ZIP now includes a rehearsed 12-step Chinese script, matching sample rubrics, official-paper source links and OGL-licensed UK KS2 mathematics PDFs. See the [current script](https://github.com/jianshengchuanchaun/paper-grading-assistant/blob/main/docs/BILIBILI_SCRIPT.zh-CN.md) and [paper/mark-scheme guide](https://github.com/jianshengchuanchaun/paper-grading-assistant/blob/main/docs/demo-materials/ONLINE_EXAMS.zh-CN.md). The source/static ZIPs retain the original v2.3.0 release contents; get the recording ZIP for the revised demonstration materials.
+
 ## 中文
 
 - **新版教学后台**：重新整理侧边导航、顶部工具栏、数据卡片、表格、模型设置和班级列表，中英文同步更新。

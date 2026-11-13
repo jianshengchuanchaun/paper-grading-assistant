@@ -85,7 +85,7 @@ npm start
 
 最多 200 个班级、200 场考试；每场考试沿用最多 500 位学生、每生 20 页的限制，实际容量取决于浏览器空间。备份导入上限为 180 MB；目前没有进行大班级容量压测，也没有云同步。
 
-录屏介绍可直接使用 [B 站操作与口播讲稿](docs/BILIBILI_SCRIPT.zh-CN.md)，另附 [英文演示指南](docs/DEMO_GUIDE.en.md) 与 [虚构示例试卷](docs/demo-materials/README.md)。
+录屏介绍可直接使用 [B 站操作与口播讲稿](docs/BILIBILI_SCRIPT.zh-CN.md)：按新版实际顺序标明“你点、你说、画面核对”，附 60 秒短版和视频简介。另附 [英文演示指南](docs/DEMO_GUIDE.en.md)、[虚构答卷及评分细则](docs/demo-materials/README.md)，以及[网上找到的官方试卷与配套评卷参考](docs/demo-materials/ONLINE_EXAMS.zh-CN.md)。
 
 ## 接入模型
 

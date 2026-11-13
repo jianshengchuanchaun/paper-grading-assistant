@@ -2,6 +2,13 @@
 
 Date: 2026-11-13 · Version: 2.3.0
 
+## Recording guide revision (2026-11-13)
+
+- Rehearsed the revised Chinese script end to end on the deployed v2.3.0 site using a fresh Edge browser context: language switch, class/assessment creation, rubric template, JPG import, empty-key DeepSeek settings, explicit simulated grading, command search, custom comments, fixed-question progression, score correction, official CSV, history search, archive/unarchive and full backup.
+- Verified Q7 stays unscored for the incomplete fictional answer. After producing the fourth simulated draft, confirming Sam/周子墨's Q6 advances to Morgan/许知夏 with Q6 retained. The matched original-paper example changes Jamie/林沐晴's Q7 from 20 to 15 and the total from 84 to 79. Official CSV still contains only two approved papers.
+- The rehearsal recorded zero AI requests and zero page JavaScript errors. No real API key, paid inference or teacher dataset was used. Application code was not changed in this documentation revision; the full application test suite was not rerun.
+- Downloaded and opened matching official Hong Kong TSA 2025 6MC1 paper (20 pages) / scheme (3 pages), plus UK KS2 2025 arithmetic paper (20 pages), mathematics schemes (40 pages) and copyright report (3 pages). Visually checked the selected arithmetic question page and marking tables; Q1–6 answers were checked against scheme page 17. UK PDFs are included with OGL attribution; Hong Kong PDFs remain local, with official links in published documentation.
+
 ## Interface update verification
 
 - TypeScript, JavaScript syntax checks, the Vite UI build and static packaging pass on Node.js 24.14.1 / Windows.

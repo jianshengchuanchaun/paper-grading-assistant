@@ -1,4 +1,4 @@
-# Interface credits and licenses
+# Third-party credits and licenses
 
 GradeFlow includes open-source components from the following projects. Their license notices are included in `LICENSES/` and in the static distribution.
 
@@ -7,3 +7,9 @@ GradeFlow includes open-source components from the following projects. Their lic
 - **shadcn/ui** — https://github.com/shadcn-ui/ui, MIT, Copyright (c) 2023 shadcn. The Radix Nova sidebar, command, button and supporting primitives were installed through shadcn CLI 4.23.0. Localized labels and integration adaptations are documented in `docs/UI_INTEGRATION.md`.
 
 Dependencies including React, Radix UI, Motion, Lucide, Tailwind CSS and PDF.js retain their respective licenses. PDF.js license files are included in `vendor/`. Geist font data is bundled locally under its SIL Open Font License; it is not fetched from a remote font service at runtime.
+
+## Official examination materials in documentation and recording kits
+
+`docs/demo-materials/ks2-2025/` includes unchanged UK Standards and Testing Agency PDFs for the 2025 KS2 mathematics arithmetic paper, marking schemes and copyright report. These retain their own Crown copyright / Open Government Licence v3.0 terms and are not covered by GradeFlow's MIT licence. See [the complete material notice](docs/demo-materials/ks2-2025/NOTICE.md), including the required attribution. The application does not load these demonstration PDFs automatically.
+
+Hong Kong TSA papers are linked from their official publisher, not mirrored in the public repository or public recording kit. Project-generated fictional papers are separately identified as fictional demonstration content.

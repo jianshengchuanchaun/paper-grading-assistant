@@ -84,7 +84,7 @@ Data remains in this browser and origin. Publishing the app to GitHub does **not
 
 The catalog supports up to 200 classes and 200 assessments; each assessment retains the existing 500-student and 20-page-per-student limits. Browser storage capacity is the practical limit. Backup import is capped at 180 MB. No large-class stress test or cloud synchronization is claimed.
 
-For a recording walkthrough, see the [English demo guide](docs/DEMO_GUIDE.en.md), [Chinese Bilibili recording script](docs/BILIBILI_SCRIPT.zh-CN.md), and [fictional sample papers](docs/demo-materials/README.md).
+For a recording walkthrough, see the [English demo guide](docs/DEMO_GUIDE.en.md), the [Chinese click-by-click Bilibili script](docs/BILIBILI_SCRIPT.zh-CN.md), and [papers with matching rubrics](docs/demo-materials/README.md). The [official-paper source guide](docs/demo-materials/ONLINE_EXAMS.zh-CN.md) links Hong Kong TSA materials and includes UK KS2 mathematics PDFs under OGL v3.0 with attribution.
 
 ## Connecting an AI service
 
