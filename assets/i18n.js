@@ -484,6 +484,11 @@
     relay: ["本地中转（.env）", "Local relay (.env)"],
     provider: ["服务商预设", "Provider preset"],
     custom: ["自定义兼容接口", "Custom compatible API"],
+    deepseekHelp: [
+      "已预填支持图片输入的 deepseek-flash。输入 DeepSeek API 密钥后，先测试连接，再用一份试卷验证批改。改用其他模型前，请确认它支持图片输入；浏览器跨域受限时可使用本地中转。",
+      "The image-capable deepseek-flash model is prefilled. Enter your DeepSeek API key, test the connection, then try one paper. Check image support before choosing another model; use the local relay if browser cross-origin requests are blocked.",
+    ],
+    providerDocs: ["官方视觉接口文档", "Official vision API docs"],
     baseUrl: ["API Base URL", "API base URL"],
     model: ["视觉模型名称", "Vision model name"],
     modelHelp: [

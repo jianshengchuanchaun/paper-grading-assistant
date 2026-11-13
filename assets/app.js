@@ -77,6 +77,7 @@
     zhipu: "https://open.bigmodel.cn/api/paas/v4",
     qwen: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     moonshot: "https://api.moonshot.cn/v1",
+    deepseek: "https://api.deepseek.com",
     openai: "https://api.openai.com/v1",
     custom: "",
   };
@@ -609,7 +610,7 @@
             `<button class="nav-item ${view === key ? "active" : ""}" data-action="view" data-view="${key}" ${view === key ? 'aria-current="page"' : ""}>${icon(ico)}${t(key)}${key === "workspace" && n.total ? `<span class="nav-count">${n.total}</span>` : ""}</button>`,
         )
         .join("")}</nav>
-      <div class="sidebar-bottom"><button class="nav-item" data-action="view" data-view="help">${icon("help")}${t("help")}</button><button class="nav-item" data-action="backup">${icon("download")}${t("backup")}</button><button class="nav-item" data-action="restore">${icon("upload")}${t("restore")}</button><div class="local-card"><div class="row">${icon("shield")}<strong>${t("localFirst")}</strong></div><p>${t("localNote")}</p></div><div class="side-footer">GRADEFLOW · v2.2</div></div>
+      <div class="sidebar-bottom"><button class="nav-item" data-action="view" data-view="help">${icon("help")}${t("help")}</button><button class="nav-item" data-action="backup">${icon("download")}${t("backup")}</button><button class="nav-item" data-action="restore">${icon("upload")}${t("restore")}</button><div class="local-card"><div class="row">${icon("shield")}<strong>${t("localFirst")}</strong></div><p>${t("localNote")}</p></div><div class="side-footer">GRADEFLOW · v2.2.1</div></div>
     </aside><div class="shell"><header class="topbar"><div class="breadcrumb">${icon("book")}<span>${t("myWorkspace")}</span><span>/</span><b>${t(view)}</b></div><div class="top-actions"><span class="save-state" id="save-state"></span><button class="language" data-action="language">${t("language")}</button><span class="avatar">${lang === "en" ? "T" : "师"}</span></div></header><main id="main" class="main" tabindex="-1">${!storageReady ? `<div class="notice error">${t(saveState)} ${button("reload-app", t("reloadApp"), "rotate", "sm")}</div>` : ""}${view === "workspace" ? workspaceHTML() : view === "library" ? libraryHTML() : view === "rubrics" ? rubricsHTML() : view === "comments" ? commentsHTML() : view === "insights" ? insightsHTML() : view === "settings" ? settingsHTML() : helpHTML()}<footer class="page-footer">${t("tagline")} &nbsp;·&nbsp; GradeFlow</footer></main></div>`;
     updateSave();
     if (view === "settings") {
@@ -763,6 +764,7 @@
         ["zhipu", "Zhipu / 智谱"],
         ["qwen", "Qwen / 通义千问"],
         ["moonshot", "Moonshot / Kimi"],
+        ["deepseek", "DeepSeek"],
         ["openai", "OpenAI"],
         ["custom", t("custom")],
       ]
@@ -773,7 +775,7 @@
         .join(
           "",
         )}</select></div><div class="field"><label for="model">${t("model")}</label><input id="model" type="text" value="${esc(settings.model)}" placeholder="vision-model-id" ${busy ? "disabled" : ""}></div><div class="field full-width"><label for="base-url">${t("baseUrl")}</label><input id="base-url" type="text" value="${esc(settings.baseUrl)}" placeholder="https://…/v1" ${busy ? "disabled" : ""}><small>${t("modelHelp")}</small></div><div class="field full-width"><label for="api-key">${t("apiKey")}</label><input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="••••••••" ${busy ? "disabled" : ""}><small>${t("keyHelp")}</small></div></div></div>
-      ${settings.mode === "relay" ? `<div class="callout">${t("relayHelp")}</div>` : ""}<div class="row wrap" style="margin-top:22px">${button("save-settings", t("save"), "check", "primary", busy ? "disabled" : "")}${button("test-connection", t("connectTest"), "spark", "", busy ? "disabled" : "")}${button("clear-key", t("clearKey"), "", "ghost", busy ? "disabled" : "")}</div><p id="connection-result" class="small muted" role="status" style="margin-top:15px"></p></section><section class="panel"><div class="row">${icon("shield")}<h2 style="margin-bottom:0">${t("privacyTitle")}</h2></div><p class="small muted" style="margin-top:12px;line-height:2">${t("privacyText")}</p></section></div>`
+      ${settings.mode === "relay" ? `<div class="callout">${t("relayHelp")}</div>` : settings.provider === "deepseek" ? `<div class="callout" id="deepseek-help">${t("deepseekHelp")} <a href="https://api-docs.deepseek.com/guides/vision/" target="_blank" rel="noopener noreferrer">${t("providerDocs")}</a></div>` : ""}<div class="row wrap" style="margin-top:22px">${button("save-settings", t("save"), "check", "primary", busy ? "disabled" : "")}${button("test-connection", t("connectTest"), "spark", "", busy ? "disabled" : "")}${button("clear-key", t("clearKey"), "", "ghost", busy ? "disabled" : "")}</div><p id="connection-result" class="small muted" role="status" style="margin-top:15px"></p></section><section class="panel"><div class="row">${icon("shield")}<h2 style="margin-bottom:0">${t("privacyTitle")}</h2></div><p class="small muted" style="margin-top:12px;line-height:2">${t("privacyText")}</p></section></div>`
     );
   }
   function helpHTML() {
@@ -1541,6 +1543,10 @@
               messages,
               temperature: 0.1,
               max_tokens: test ? 16 : 8192,
+              // Keep the output budget available for the answer and grading JSON.
+              ...(config.mode === "direct" && config.provider === "deepseek"
+                ? { thinking: { type: "disabled" } }
+                : {}),
             }),
             signal: controller.signal,
             credentials: "omit",
@@ -2504,7 +2510,7 @@
     if (el.id === "provider") {
       settings.provider = el.value;
       settings.baseUrl = providers[el.value];
-      settings.model = "";
+      settings.model = el.value === "deepseek" ? "deepseek-flash" : "";
       apiKey = "";
       render();
       save();
